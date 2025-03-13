@@ -1,0 +1,32 @@
+# Ignore everything in parent directory
+../**
+../.*
+
+# Source code
+src/**
+
+# Tests
+.vscode-test/**
+out/test/**
+
+# Development files
+.vscode/**
+.gitignore
+.yarnrc
+webpack.config.js
+tsconfig.json
+.eslintrc.json
+**/*.map
+**/*.ts
+
+# Dependencies
+node_modules/**
+
+# Build output (except dist)
+out/**
+!dist/**
+
+# Other
+.DS_Store
+**/.DS_Store
+**/*.vsix

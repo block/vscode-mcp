@@ -1,0 +1,50 @@
+{
+  "name": "code-mcp-server",
+  "version": "0.1.0",
+  "description": "Code MCP Server for AI assistants to interact with VS Code",
+  "main": "build/index.js",
+  "type": "module",
+  "bin": {
+    "code-mcp-server": "build/cli.js"
+  },
+  "files": [
+    "build"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "postbuild": "chmod +x build/cli.js",
+    "start": "node build/index.js",
+    "dev": "tsc -w",
+    "prepare": "npm run build",
+    "watch": "tsc --watch",
+    "inspector": "npx @modelcontextprotocol/inspector build/index.js",
+    "prepublishOnly": "npm run build",
+    "install-global": "npm run build && npm pack && npm install -g $(ls code-mcp-server-*.tgz | sort -V | tail -n 1)"
+  },
+  "keywords": [
+    "vscode",
+    "mcp",
+    "server",
+    "ai",
+    "assistant"
+  ],
+  "author": "Andrew Gertig",
+  "license": "",
+  "repository": {
+    "type": "git",
+    "url": ""
+  },
+  "homepage": "",
+  "bugs": {
+    "url": ""
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "0.6.0",
+    "yaml": "^2.7.0",
+    "yargs": "^17.7.2"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.24",
+    "@types/yargs": "^17.0.33"
+  }
+}

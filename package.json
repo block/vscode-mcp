@@ -1,0 +1,30 @@
+{
+  "name": "code-mcp",
+  "private": true,
+  "repository": {
+    "type": "git",
+    "url": "",
+    "directory": "code-mcp"
+  },
+  "workspaces": [
+    "server",
+    "extension"
+  ],
+  "scripts": {
+    "build": "npm run build:server && npm run build:extension",
+    "build:server": "cd server && npm run build",
+    "build:extension": "cd extension && npm run package",
+    "publish:server": "cd server && npm publish",
+    "publish:extension": "cd extension && npm run publish-extension",
+    "dev:server": "cd server && npm run watch",
+    "dev:extension": "cd extension && npm run watch",
+    "clean": "rimraf **/dist **/build **/out **/*.vsix",
+    "test": "npm run test --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present"
+  },
+  "devDependencies": {
+    "rimraf": "^5.0.5",
+    "typescript": "^5.3.3"
+  },
+  "version": "0.1.2"
+}

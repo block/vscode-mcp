@@ -1,0 +1,48 @@
+{
+  "name": "mcp-extension",
+  "displayName": "MCP Extension",
+  "description": "Extension for VS Code MCP Server",
+  "version": "0.1.4",
+  "publisher": "gertig",
+  "private": true,
+  "repository": {
+    "type": "git",
+    "url": "",
+    "directory": "vscode-mcp/extension"
+  },
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "dist/extension.js",
+  "contributes": {
+    "commands": []
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run package",
+    "compile": "webpack",
+    "watch": "webpack --watch",
+    "package": "webpack --mode production --devtool hidden-source-map",
+    "package-extension": "npm --prefix $(pwd) exec vsce package",
+    "publish-extension": "npm --prefix $(pwd) exec vsce publish",
+    "lint": "eslint src --ext ts",
+    "test": "node ./dist/test/runTest.js"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.24",
+    "@types/vscode": "^1.44.0",
+    "@typescript-eslint/eslint-plugin": "^6.7.0",
+    "@typescript-eslint/parser": "^6.7.0",
+    "eslint": "^8.26.0",
+    "ts-loader": "^9.5.0",
+    "webpack": "^5.88.0",
+    "webpack-cli": "^5.1.4",
+    "@vscode/vsce": "^2.24.0"
+  },
+  "workspaces": null
+}
