@@ -1,0 +1,54 @@
+# VS Code MCP Project Hints
+
+## Project Structure
+
+The VS Code MCP (Model Context Protocol) project consists of two main components:
+
+- `/server`: MCP server implementation that handles protocol communication
+- `/extension`: VS Code extension that provides native VS Code integration
+
+## Key Concepts
+
+- MCP (Model Context Protocol): A protocol for AI agents to interact with external tools and services
+- The server acts as a bridge between AI agents (like Goose) and VS Code
+- The extension provides native VS Code features like diff viewing and file manipulation
+
+## Common Operations
+
+- File changes are staged through the server and reviewed via VS Code diff viewer
+- The extension runs on a dynamic port, stored in `ag-VS Code-mcp-extension.port`
+- Communication between server and extension happens over TCP socket
+
+## Available Tools
+
+- `create_diff`: Shows file changes in VS Code diff viewer for approval
+  - Required params: filePath, newContent
+  - Optional params: description
+- `check_extension_status`: Verifies VS Code extension is installed and responding
+- `get_extension_port`: Gets the current port number for extension communication
+
+## File Locations
+
+- Extension port file: `os.tmpdir()/ag-VS Code-mcp-extension.port` or `/tmp/ag-VS Code-mcp-extension.port`
+- Server log file: `server/VS Code-mcp-server-debug.log`
+
+## Best Practices
+
+- Always use absolute paths when working with files
+- Handle cleanup of temporary files in both success and error cases
+- Provide descriptive titles for diffs to help users understand changes
+- Check extension connectivity before attempting operations that require it
+
+## Common Issues
+
+- Extension port file may not exist if extension isn't running
+- File paths need to be resolved to absolute paths
+- Temporary files should be cleaned up after diff operations
+
+## Environment Variables
+
+- `PROJECTS_BASE_DIR`: Base directory for VS Code projects
+
+## How to solve problems in this codebase
+
+If we are having challenges easily solving a problem, take a moment to reflect on 5 or 6 possible sources of the problem. Then distill those into 1 or 2 of the mostly likely options. Add logs to help prove or disprove these possibilities before you move on to attempting to fix the problem with code.

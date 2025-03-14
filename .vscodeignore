@@ -1,0 +1,16 @@
+# Ignore everything by default
+*
+.*
+
+# But allow the extension directory
+!extension/**
+
+# And still ignore unnecessary files within extension
+extension/src/**
+extension/.vscode/**
+extension/.vscode-test/**
+extension/node_modules/**
+extension/tsconfig.json
+extension/.eslintrc.json
+extension/**/*.map
+extension/**/*.ts
