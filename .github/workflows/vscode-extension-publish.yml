@@ -1,0 +1,50 @@
+name: Publish VS Code Extension
+
+on:
+  push:
+    tags:
+      - "v*" # Push events to matching v*, i.e. v1.0, v20.15.10
+    paths:
+      - "extension/**"
+      - ".github/workflows/vscode-extension-publish.yml"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./extension
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: "npm"
+          cache-dependency-path: "./extension/package-lock.json"
+
+      - name: Install dependencies
+        run: npm ci
+
+      # - name: Run tests
+      #   run: npm test
+
+      # - name: Package Extension
+      #   run: npm run package-extension
+
+      - name: Publish to Visual Studio Marketplace
+        if: success()
+        run: npm run publish-extension
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+
+      # - name: Create GitHub Release
+      #   uses: softprops/action-gh-release@v1
+      #   if: success()
+      #   with:
+      #     files: "*.vsix"
+      #     generate_release_notes: true
+      #   env:
+      #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
