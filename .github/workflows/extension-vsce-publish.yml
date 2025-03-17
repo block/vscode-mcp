@@ -42,7 +42,7 @@ jobs:
         id: version_check
         run: |
           VERSION=$(node -p "require('./package.json').version")
-          if vsce show block.vscode-mcp | grep -q "\"version\": \"$VERSION\""; then
+          if vsce show block.vscode-mcp-extension | grep -q "\"version\": \"$VERSION\""; then
             echo "Version $VERSION already exists in marketplace"
             exit 1
           else
