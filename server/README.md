@@ -13,7 +13,7 @@ A Model Context Protocol (MCP) server for VS Code integration, enabling AI agent
 You can install the Code MCP Server using npx:
 
 ```bash
-npx code-mcp-server install
+npx vscode-mcp-server install
 ```
 
 This command will:
@@ -39,12 +39,12 @@ If you want to test the package locally before publishing to npm, you can use `n
    npm pack
    ```
 
-   This will create a file like `code-mcp-server-X.X.X.tgz` in the current directory.
+   This will create a file like `vscode-mcp-server-X.X.X.tgz` in the current directory.
 
 3. Install the package globally from the local tarball:
 
    ```bash
-   npm install -g ./code-mcp-server-X.X.X.tgz
+   npm install -g ./vscode-mcp-server-X.X.X.tgz
    ```
 
 ## Usage
@@ -62,10 +62,10 @@ After installation, you'll need to configure your AI assistant to use this serve
 
 ![Goose Settings](../assets/GooseSettings.png)
 
-- ID: `code-mcp-server`
-- Name: `Code MCP Server`
-- Description: `Allows interaction with VS Code through the Model Context Protocol`
-- Command: `npx code-mcp-server`
+- ID: `vscode-mcp-server`
+- Name: `VSCode MCP Server`
+- Description: `Allows interaction with VSCode through the Model Context Protocol`
+- Command: `npx vscode-mcp-server`
 
 ### Claude Desktop Configuration
 
@@ -77,9 +77,9 @@ Add the following to your Claude Desktop configuration file:
 ```json
 {
   "mcpServers": {
-    "code-mcp-server": {
+    "vscode-mcp-server": {
       "command": "npx",
-      "args": ["code-mcp-server"],
+      "args": ["vscode-mcp-server"],
       "env": {}
     }
   }
@@ -90,7 +90,7 @@ Add the following to your Claude Desktop configuration file:
 
 For other AI assistants that support the Model Context Protocol, refer to their documentation for how to configure external MCP servers. You'll typically need to provide:
 
-1. The command `npx code-mcp-server`
+1. The command `npx vscode-mcp-server`
 2. Any required environment variables
 
 ## Development

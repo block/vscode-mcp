@@ -1,11 +1,11 @@
-# Code MCP
+# VSCode MCP
 
-This monorepo contains the Code MCP Server and its companion VS Code extension, which together enable AI agents and assistants, like Goose or Claude, to interact with VS Code through the Model Context Protocol.
+This monorepo contains the VSCode MCP Server and its companion VSCode Extension, which together enable AI agents and assistants, like Goose or Claude, to interact with VSCode through the Model Context Protocol.
 
 ## Project Structure
 
 ```
-code-mcp/
+vscode-mcp/
 ├── server/    # MCP server implementation
 └── extension/ # VS Code extension
 ```
@@ -15,7 +15,7 @@ code-mcp/
 1. Install the MCP Server
 
 ```bash
-npx code-mcp-server install
+npx vscode-mcp-server install
 ```
 
 2. Install the MCP Extension
@@ -31,7 +31,7 @@ npx code-mcp-server install
 - ID: `code-mcp`
 - Name: `VS Code`
 - Description: `Allows interaction with VS Code through the Model Context Protocol`
-- Command: `npx code-mcp-server`
+- Command: `npx vscode-mcp-server`
 
 ### Claude Desktop Setup
 
@@ -40,9 +40,9 @@ Add this to your Claude Desktop config file (`~/Library/Application Support/Clau
 ```json
 {
   "mcpServers": {
-    "code-mcp-server": {
+    "vscode-mcp-server": {
       "command": "npx",
-      "args": ["code-mcp-server"],
+      "args": ["vscode-mcp-server"],
       "env": {}
     }
   }

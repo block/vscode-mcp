@@ -4,6 +4,9 @@
 name: Server - Node.js Package
 
 on:
+  push:
+    tags:
+      - "v*" # Trigger only on tags that start with 'v', e.g., v1.0.0
   # release:
   #   types: [created]
   workflow_dispatch:
@@ -27,13 +30,22 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
         with:
           node-version: 20
           registry-url: https://registry.npmjs.org/
-      - run: npm install
-      - run: npm ci
-      - run: npm publish
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Clean install dependencies
+        run: npm ci
+
+      - name: Publish to npm
+        run: npm publish
         env:
           NODE_AUTH_TOKEN: ${{secrets.NPM_PUBLISH_TOKEN}}

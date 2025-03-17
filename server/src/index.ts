@@ -67,7 +67,7 @@ async function logToFile(message: string, ...args: any[]): Promise<void> {
     .map((arg) => (typeof arg === "string" ? arg : JSON.stringify(arg)))
     .join(" ");
   const logMessage = `[${timestamp}] ${message} ${formattedArgs}`.trim() + "\n";
-  const logFile = path.join(__dirname, "..", "code-mcp-server-debug.log");
+  const logFile = path.join(__dirname, "..", "vscode-mcp-server-debug.log");
 
   try {
     await fs.appendFile(logFile, logMessage);
@@ -105,7 +105,7 @@ class VSCodeServer {
   private logFile: string;
 
   constructor(config: ServerConfig = {}) {
-    this.logFile = path.join(__dirname, "..", "code-mcp-server-debug.log");
+    this.logFile = path.join(__dirname, "..", "vscode-mcp-server-debug.log");
 
     // Log server startup
     this.log("MCP Server started");
@@ -120,7 +120,7 @@ class VSCodeServer {
 
     this.server = new Server(
       {
-        name: "code-mcp-server",
+        name: "vscode-mcp-server",
         version: "1.0.0",
       },
       {
