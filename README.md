@@ -20,7 +20,7 @@ npx vscode-mcp-server install
 
 2. Install the MCP Extension
 
-> [MCP Extension](https://marketplace.visualstudio.com/items?itemName=gertig.mcp-extension)
+> [MCP Extension](https://marketplace.visualstudio.com/items?itemName=block.vscode-mcp-extension)
 
 ## Configuration
 
@@ -54,33 +54,36 @@ Add this to your Claude Desktop config file (`~/Library/Application Support/Clau
 The Code MCP server provides the following tools for AI agents to interact with VS Code:
 
 ### `create_diff`
+
 Creates and shows a diff for modifying existing files:
+
 - Shows changes preview before applying
 - Requires user approval
 - Only works with existing files
 
-
 ### `open_file`
+
 Opens files in the VS Code editor:
+
 - Used for viewing new or modified files
 
-
 ### `open_project`
+
 Opens a project folder in VS Code:
+
 - Sets up working directory for AI agent
 
-
 ### `check_extension_status`
+
 Checks if extension is installed and responding
 
-
 ### `get_extension_port`
+
 Gets the port number for VS Code MCP Extension
 
-
 ### `list_available_projects`
-Shows projects from port registry file
 
+Shows projects from port registry file
 
 ## License
 
