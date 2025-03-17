@@ -6,7 +6,7 @@ on:
       - "v*" # Push events to matching v*, i.e. v1.0, v20.15.10
     paths:
       - "extension/**"
-      - ".github/workflows/vscode-extension-publish.yml"
+      - ".github/workflows/extension-vsce-publish.yml"
   workflow_dispatch:
 
 jobs:
