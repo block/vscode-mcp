@@ -1,6 +1,6 @@
 {
   "name": "vscode-mcp-extension",
-  "displayName": "MCP Extension",
+  "displayName": "MCP Server",
   "description": "Extension for the VSCode MCP Server",
   "version": "0.1.0",
   "publisher": "block",
