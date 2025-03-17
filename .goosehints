@@ -29,8 +29,8 @@ The VS Code MCP (Model Context Protocol) project consists of two main components
 
 ## File Locations
 
-- Extension port file: `os.tmpdir()/ag-VS Code-mcp-extension.port` or `/tmp/ag-VS Code-mcp-extension.port`
-- Server log file: `server/VS Code-mcp-server-debug.log`
+- Extension port file: `os.tmpdir()/ag-vscode-mcp-extension-registry.json` or `/tmp/ag-vscode-mcp-extension-registry.json`
+- Server log file: `server/vscode-mcp-server-debug.log`
 
 ## Best Practices
 

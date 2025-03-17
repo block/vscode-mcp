@@ -27,17 +27,17 @@ async function ensureInstallDir(installDir: string): Promise<void> {
 // Copy the compiled server file to the installation directory
 async function installServer(): Promise<void> {
   try {
-    console.log("📦 Installing code-mcp-server globally...");
+    console.log("📦 Installing vscode-mcp-server globally...");
 
     // Install the package globally
     const { execSync } = await import("child_process");
-    execSync("npm install -g code-mcp-server", { stdio: "inherit" });
+    execSync("npm install -g vscode-mcp-server", { stdio: "inherit" });
 
-    console.log("✅ code-mcp-server installed globally");
+    console.log("✅ vscode-mcp-server installed globally");
 
     return;
   } catch (error) {
-    console.error("❌ Failed to install code-mcp-server globally:", error);
+    console.error("❌ Failed to install vscode-mcp-server globally:", error);
     console.error(
       "⚠️  Sometimes a VPN connection can block access to NPM Registry"
     );
@@ -114,9 +114,9 @@ async function updateClaudeConfig(): Promise<void> {
       config.mcpServers = {};
     }
 
-    config.mcpServers["code-mcp-server"] = {
+    config.mcpServers["vscode-mcp-server"] = {
       command: "npx",
-      args: ["code-mcp-server"],
+      args: ["vscode-mcp-server"],
       env: {
         PROJECTS_BASE_DIR: "",
       },
@@ -176,10 +176,10 @@ async function updateGooseConfig(): Promise<void> {
       config.extensions = {};
     }
 
-    config.extensions["code-mcp-server"] = {
+    config.extensions["vscode-mcp-server"] = {
       name: "VS Code MCP Server",
       cmd: "npx",
-      args: ["code-mcp-server"],
+      args: ["vscode-mcp-server"],
       enabled: true,
       type: "stdio",
     };
@@ -201,12 +201,12 @@ async function updateGooseConfig(): Promise<void> {
 async function generateGooseUrl(): Promise<string> {
   try {
     // Get the package name
-    const packageName = "code-mcp-server";
+    const packageName = "vscode-mcp-server";
 
     // Generate the Goose URL using npx
     const gooseUrl = `goose://extension?cmd=npx&arg=${encodeURIComponent(
       packageName
-    )}&id=code-mcp-server&name=VS%20Code%20MCP%20Server&description=Allows%20interacting%20with%20VS%20Code%20from%20Goose`;
+    )}&id=vscode-mcp-server&name=VS%20Code%20MCP%20Server&description=Allows%20interacting%20with%20VS%20Code%20from%20Goose`;
 
     return gooseUrl;
   } catch (error) {

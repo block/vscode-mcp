@@ -1,9 +1,9 @@
 {
-  "name": "mcp-extension",
+  "name": "vscode-mcp-extension",
   "displayName": "MCP Extension",
-  "description": "Extension for VS Code MCP Server",
-  "version": "0.1.4",
-  "publisher": "gertig",
+  "description": "Extension for the VSCode MCP Server",
+  "version": "0.1.0",
+  "publisher": "block",
   "private": true,
   "repository": {
     "type": "git",

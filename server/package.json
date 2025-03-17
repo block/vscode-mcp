@@ -1,11 +1,11 @@
 {
-  "name": "code-mcp-server",
-  "version": "0.1.0",
-  "description": "Code MCP Server for AI assistants to interact with VS Code",
+  "name": "vscode-mcp-server",
+  "version": "0.1.10",
+  "description": "VSCode MCP Server for AI assistants to interact with VSCode",
   "main": "build/index.js",
   "type": "module",
   "bin": {
-    "code-mcp-server": "build/cli.js"
+    "vscode-mcp-server": "build/cli.js"
   },
   "files": [
     "build"
@@ -19,7 +19,7 @@
     "watch": "tsc --watch",
     "inspector": "npx @modelcontextprotocol/inspector build/index.js",
     "prepublishOnly": "npm run build",
-    "install-global": "npm run build && npm pack && npm install -g $(ls code-mcp-server-*.tgz | sort -V | tail -n 1)"
+    "install-global": "npm run build && npm pack && npm install -g $(ls vscode-mcp-server-*.tgz | sort -V | tail -n 1)"
   },
   "keywords": [
     "vscode",
