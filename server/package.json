@@ -1,6 +1,6 @@
 {
   "name": "vscode-mcp-server",
-  "version": "0.1.10",
+  "version": "0.1.11",
   "description": "VSCode MCP Server for AI assistants to interact with VSCode",
   "main": "build/index.js",
   "type": "module",
