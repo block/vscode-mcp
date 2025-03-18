@@ -31,18 +31,23 @@
     "package-extension": "npm --prefix $(pwd) exec vsce package",
     "publish-extension": "npm --prefix $(pwd) exec vsce publish",
     "lint": "eslint src --ext ts",
-    "test": "node ./dist/test/runTest.js"
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
   },
   "devDependencies": {
     "@types/node": "^20.11.24",
     "@types/vscode": "^1.44.0",
     "@typescript-eslint/eslint-plugin": "^6.7.0",
     "@typescript-eslint/parser": "^6.7.0",
+    "@vitest/coverage-v8": "^1.6.1",
+    "@vscode/vsce": "^2.24.0",
     "eslint": "^8.26.0",
     "ts-loader": "^9.5.0",
+    "vite-tsconfig-paths": "^5.1.4",
+    "vitest": "^1.6.1",
     "webpack": "^5.88.0",
-    "webpack-cli": "^5.1.4",
-    "@vscode/vsce": "^2.24.0"
+    "webpack-cli": "^5.1.4"
   },
   "workspaces": null
 }

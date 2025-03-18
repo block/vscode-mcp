@@ -26,3 +26,4 @@ Thumbs.db
 
 # VS Code
 server/*.tgz
+coverage
