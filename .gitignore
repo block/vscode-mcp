@@ -26,7 +26,3 @@ Thumbs.db
 
 # VS Code
 server/*.tgz
-
-# Ignore workspace root lockfile
-package-lock.json
-yarn.lock
