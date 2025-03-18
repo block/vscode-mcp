@@ -1,9 +1,6 @@
 import { Server } from '@modelcontextprotocol/sdk/server/index.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
-import {
-  CallToolRequestSchema,
-  ListToolsRequestSchema,
-} from '@modelcontextprotocol/sdk/types.js'
+import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js'
 import { exec } from 'child_process'
 import { promisify } from 'util'
 import { promises as fs } from 'fs'
@@ -63,9 +60,7 @@ interface ApplyFileChangesArgs {
 // Add standalone logging function for use outside the class
 async function logToFile(message: string, ...args: any[]): Promise<void> {
   const timestamp = new Date().toISOString()
-  const formattedArgs = args
-    .map((arg) => (typeof arg === 'string' ? arg : JSON.stringify(arg)))
-    .join(' ')
+  const formattedArgs = args.map(arg => (typeof arg === 'string' ? arg : JSON.stringify(arg))).join(' ')
   const logMessage = `[${timestamp}] ${message} ${formattedArgs}`.trim() + '\n'
   const logFile = path.join(__dirname, '..', 'code-mcp-server-debug.log')
 
@@ -136,11 +131,8 @@ class VSCodeServer {
 
   private async log(message: string, ...args: any[]): Promise<void> {
     const timestamp = new Date().toISOString()
-    const formattedArgs = args
-      .map((arg) => (typeof arg === 'string' ? arg : JSON.stringify(arg)))
-      .join(' ')
-    const logMessage =
-      `[${timestamp}] ${message} ${formattedArgs}`.trim() + '\n'
+    const formattedArgs = args.map(arg => (typeof arg === 'string' ? arg : JSON.stringify(arg))).join(' ')
+    const logMessage = `[${timestamp}] ${message} ${formattedArgs}`.trim() + '\n'
 
     try {
       await fs.appendFile(this.logFile, logMessage)
@@ -183,17 +175,9 @@ class VSCodeServer {
           },
           required: ['filePath', 'newContent', 'targetProjectPath'],
         },
-        handler: async (
-          args: ApplyFileChangesArgs & { targetProjectPath: string }
-        ): Promise<ToolResponse> => {
-          if (
-            !args?.filePath ||
-            !args?.newContent ||
-            !args?.targetProjectPath
-          ) {
-            throw new Error(
-              'Invalid arguments: filePath, newContent, and targetProjectPath are required'
-            )
+        handler: async (args: ApplyFileChangesArgs & { targetProjectPath: string }): Promise<ToolResponse> => {
+          if (!args?.filePath || !args?.newContent || !args?.targetProjectPath) {
+            throw new Error('Invalid arguments: filePath, newContent, and targetProjectPath are required')
           }
           return await this.applyFileChanges(args)
         },
@@ -215,8 +199,7 @@ class VSCodeServer {
             },
             viewColumn: {
               type: 'number',
-              description:
-                'The view column to open the file in (1, 2, 3, etc.)',
+              description: 'The view column to open the file in (1, 2, 3, etc.)',
             },
             preserveFocus: {
               type: 'boolean',
@@ -237,9 +220,7 @@ class VSCodeServer {
           preview?: boolean
         }): Promise<ToolResponse> => {
           if (!args?.filePath || !args?.targetProjectPath) {
-            throw new Error(
-              'Invalid arguments: filePath and targetProjectPath are required'
-            )
+            throw new Error('Invalid arguments: filePath and targetProjectPath are required')
           }
           return await this.openFile(args)
         },
@@ -263,10 +244,7 @@ class VSCodeServer {
           },
           required: ['projectPath'],
         },
-        handler: async (args: {
-          projectPath: string
-          newWindow?: boolean
-        }): Promise<ToolResponse> => {
+        handler: async (args: { projectPath: string; newWindow?: boolean }): Promise<ToolResponse> => {
           if (!args?.projectPath) {
             throw new Error('Invalid arguments: projectPath is required')
           }
@@ -275,8 +253,7 @@ class VSCodeServer {
       },
       {
         name: 'check_extension_status',
-        description:
-          'Check if the VS Code MCP Extension is installed and responding',
+        description: 'Check if the VS Code MCP Extension is installed and responding',
         inputSchema: {
           type: 'object',
           properties: {
@@ -287,16 +264,12 @@ class VSCodeServer {
           },
           required: ['targetProjectPath'],
         },
-        handler: async (args: {
-          targetProjectPath: string
-        }): Promise<ToolResponse> => {
+        handler: async (args: { targetProjectPath: string }): Promise<ToolResponse> => {
           if (!args?.targetProjectPath) {
             throw new Error('Invalid arguments: targetProjectPath is required')
           }
 
-          const extension = await this.connectToExtension(
-            args.targetProjectPath
-          )
+          const extension = await this.connectToExtension(args.targetProjectPath)
           if (!extension) {
             return {
               content: [
@@ -313,10 +286,8 @@ class VSCodeServer {
             const response = await new Promise<{
               success?: boolean
               error?: string
-            }>((resolve) => {
-              extension.once('data', (data) =>
-                resolve(JSON.parse(data.toString()))
-              )
+            }>(resolve => {
+              extension.once('data', data => resolve(JSON.parse(data.toString())))
             })
             extension.end()
 
@@ -326,9 +297,7 @@ class VSCodeServer {
                   type: 'text',
                   text: response.success
                     ? 'VS Code MCP Extension is installed and responding'
-                    : `VS Code MCP Extension error: ${
-                        response.error || 'Unknown error'
-                      }`,
+                    : `VS Code MCP Extension error: ${response.error || 'Unknown error'}`,
                 },
               ],
             }
@@ -346,8 +315,7 @@ class VSCodeServer {
       },
       {
         name: 'get_extension_port',
-        description:
-          'Get the port number that the VS Code MCP Extension is running on',
+        description: 'Get the port number that the VS Code MCP Extension is running on',
         inputSchema: {
           type: 'object',
           properties: {
@@ -358,9 +326,7 @@ class VSCodeServer {
           },
           required: ['targetProjectPath'],
         },
-        handler: async (args: {
-          targetProjectPath: string
-        }): Promise<ToolResponse> => {
+        handler: async (args: { targetProjectPath: string }): Promise<ToolResponse> => {
           if (!args?.targetProjectPath) {
             throw new Error('Invalid arguments: targetProjectPath is required')
           }
@@ -383,13 +349,10 @@ class VSCodeServer {
             const socket = new net.Socket()
             await new Promise<void>((resolve, reject) => {
               socket.connect(port, '127.0.0.1', async () => {
-                await this.log(
-                  'Successfully connected to extension on port:',
-                  port
-                )
+                await this.log('Successfully connected to extension on port:', port)
                 resolve()
               })
-              socket.on('error', async (error) => {
+              socket.on('error', async error => {
                 await this.log('Error connecting to extension:', error)
                 reject(error)
               })
@@ -433,7 +396,7 @@ class VSCodeServer {
     ]
 
     // Set up tool handlers
-    this.server.setRequestHandler(ListToolsRequestSchema, async (request) => {
+    this.server.setRequestHandler(ListToolsRequestSchema, async request => {
       await logRequest('list_tools', request.params)
       return {
         tools: tools.map(({ name, description, inputSchema }) => ({
@@ -445,19 +408,17 @@ class VSCodeServer {
     })
 
     // Create a map of tool handlers for quick lookup
-    const toolHandlers = new Map(tools.map((tool) => [tool.name, tool.handler]))
+    const toolHandlers = new Map(tools.map(tool => [tool.name, tool.handler]))
 
     // Handle tool execution
-    this.server.setRequestHandler(CallToolRequestSchema, async (request) => {
+    this.server.setRequestHandler(CallToolRequestSchema, async request => {
       const { name, arguments: rawArgs } = request.params
       await this.log('Handling tool call:', name, rawArgs)
 
       try {
         // Check if targetProjectPath is missing for tools that require it
         const toolRequiresProjectPath = tools.some(
-          (tool) =>
-            tool.name === name &&
-            tool.inputSchema.required.includes('targetProjectPath')
+          tool => tool.name === name && tool.inputSchema.required.includes('targetProjectPath')
         )
 
         if (
@@ -515,10 +476,7 @@ class VSCodeServer {
     }
   }
 
-  private async findExtensionRegistry(): Promise<Record<
-    string,
-    number
-  > | null> {
+  private async findExtensionRegistry(): Promise<Record<string, number> | null> {
     try {
       const registryLocations = [
         path.join(os.tmpdir(), 'ag-vscode-mcp-extension-registry.json'),
@@ -550,9 +508,7 @@ class VSCodeServer {
     }
   }
 
-  private async findExtensionPort(
-    targetProjectPath: string
-  ): Promise<number | null> {
+  private async findExtensionPort(targetProjectPath: string): Promise<number | null> {
     try {
       const registry = await this.findExtensionRegistry()
 
@@ -562,9 +518,7 @@ class VSCodeServer {
 
       // If we have a target project path, try to find a matching extension instance
       if (targetProjectPath) {
-        const absolutePath = path.isAbsolute(targetProjectPath)
-          ? targetProjectPath
-          : path.resolve(targetProjectPath)
+        const absolutePath = path.isAbsolute(targetProjectPath) ? targetProjectPath : path.resolve(targetProjectPath)
 
         // First, look for an exact match
         if (registry[absolutePath]) {
@@ -575,10 +529,7 @@ class VSCodeServer {
 
         // Next, look for a parent/child relationship
         for (const [workspace, port] of Object.entries(registry)) {
-          if (
-            absolutePath.startsWith(workspace + path.sep) ||
-            workspace.startsWith(absolutePath + path.sep)
-          ) {
+          if (absolutePath.startsWith(workspace + path.sep) || workspace.startsWith(absolutePath + path.sep)) {
             await this.log(`Found related workspace match with port ${port}`)
             return port
           }
@@ -595,9 +546,7 @@ class VSCodeServer {
     }
   }
 
-  private async connectToExtension(
-    targetProjectPath?: string
-  ): Promise<net.Socket | null> {
+  private async connectToExtension(targetProjectPath?: string): Promise<net.Socket | null> {
     try {
       if (targetProjectPath) {
         const port = await this.findExtensionPort(targetProjectPath)
@@ -606,9 +555,7 @@ class VSCodeServer {
         }
       }
 
-      throw new Error(
-        'No extension instances found in registry for the specified project path'
-      )
+      throw new Error('No extension instances found in registry for the specified project path')
     } catch (error) {
       await this.log('Failed to connect to VS Code extension:', error)
       return null
@@ -624,7 +571,7 @@ class VSCodeServer {
         resolve()
       })
 
-      socket.on('error', (err) => {
+      socket.on('error', err => {
         reject(err)
       })
     })
@@ -632,12 +579,7 @@ class VSCodeServer {
     return socket
   }
 
-  private async showDiff(
-    originalPath: string,
-    modifiedPath: string,
-    title: string,
-    targetProjectPath: string
-  ) {
+  private async showDiff(originalPath: string, modifiedPath: string, title: string, targetProjectPath: string) {
     await this.log('Attempting to show diff:', {
       originalPath,
       modifiedPath,
@@ -650,9 +592,7 @@ class VSCodeServer {
       await fs.access(originalPath)
     } catch (error) {
       await this.log('Error: Original file does not exist:', originalPath)
-      throw new Error(
-        `Cannot perform diff because the target file does not exist: ${originalPath}`
-      )
+      throw new Error(`Cannot perform diff because the target file does not exist: ${originalPath}`)
     }
 
     // Try to show diff in VS Code via extension
@@ -674,8 +614,8 @@ class VSCodeServer {
           success: boolean
           accepted?: boolean
           error?: string
-        }>((resolve) => {
-          extension.once('data', async (data) => {
+        }>(resolve => {
+          extension.once('data', async data => {
             await this.log('Received response from extension:', data.toString())
             resolve(JSON.parse(data.toString()))
           })
@@ -705,9 +645,7 @@ class VSCodeServer {
 
     // Always generate text diff as fallback
     try {
-      const { stdout } = await execAsync(
-        `diff -u "${originalPath}" "${modifiedPath}"`
-      )
+      const { stdout } = await execAsync(`diff -u "${originalPath}" "${modifiedPath}"`)
       return stdout
     } catch (error) {
       // If diff fails, create a basic text comparison
@@ -718,13 +656,8 @@ class VSCodeServer {
       } catch (readError) {
         // If reading the original file fails, it likely doesn't exist
         if ((readError as NodeJS.ErrnoException).code === 'ENOENT') {
-          await this.log(
-            'Error: Cannot read original file, it does not exist:',
-            originalPath
-          )
-          throw new Error(
-            `Cannot perform diff because the target file does not exist: ${originalPath}`
-          )
+          await this.log('Error: Cannot read original file, it does not exist:', originalPath)
+          throw new Error(`Cannot perform diff because the target file does not exist: ${originalPath}`)
         }
         // For other errors, rethrow
         throw readError
@@ -732,17 +665,13 @@ class VSCodeServer {
     }
   }
 
-  private async applyFileChanges(
-    args: ApplyFileChangesArgs & { targetProjectPath: string }
-  ) {
+  private async applyFileChanges(args: ApplyFileChangesArgs & { targetProjectPath: string }) {
     const { filePath, newContent, description, targetProjectPath } = args
     let tempFile: string | null = null
 
     try {
       // Validate the file exists
-      const absolutePath = path.isAbsolute(filePath)
-        ? filePath
-        : path.resolve(filePath)
+      const absolutePath = path.isAbsolute(filePath) ? filePath : path.resolve(filePath)
 
       // Check if the file exists
       try {
@@ -764,9 +693,7 @@ class VSCodeServer {
       // Connect to VS Code extension
       const extension = await this.connectToExtension(targetProjectPath)
       if (!extension) {
-        throw new Error(
-          'Could not connect to VS Code extension for the specified project path'
-        )
+        throw new Error('Could not connect to VS Code extension for the specified project path')
       }
 
       // Show diff and get user's decision
@@ -829,9 +756,7 @@ class VSCodeServer {
     await this.log('Attempting to open file:', filePath, options)
 
     // Ensure the file path is absolute
-    const absolutePath = path.isAbsolute(filePath)
-      ? filePath
-      : path.resolve(filePath)
+    const absolutePath = path.isAbsolute(filePath) ? filePath : path.resolve(filePath)
 
     // Check if file exists
     try {
@@ -877,8 +802,8 @@ class VSCodeServer {
       const response = await new Promise<{
         success: boolean
         error?: string
-      }>((resolve) => {
-        extension.once('data', async (data) => {
+      }>(resolve => {
+        extension.once('data', async data => {
           await this.log('Received response from extension:', data.toString())
           resolve(JSON.parse(data.toString()))
         })
@@ -911,17 +836,12 @@ class VSCodeServer {
     }
   }
 
-  private async openProject(args: {
-    projectPath: string
-    newWindow?: boolean
-  }): Promise<any> {
+  private async openProject(args: { projectPath: string; newWindow?: boolean }): Promise<any> {
     const { projectPath, newWindow = true } = args
     await this.log('Attempting to open project:', projectPath, { newWindow })
 
     // Ensure the project path is absolute
-    const absolutePath = path.isAbsolute(projectPath)
-      ? projectPath
-      : path.resolve(projectPath)
+    const absolutePath = path.isAbsolute(projectPath) ? projectPath : path.resolve(projectPath)
 
     try {
       // First check if the directory exists
@@ -1058,8 +978,8 @@ class VSCodeServer {
         const openResponse = await new Promise<{
           success: boolean
           error?: string
-        }>((resolve) => {
-          extension.once('data', async (data) => {
+        }>(resolve => {
+          extension.once('data', async data => {
             await this.log('Received open response:', data.toString())
             resolve(JSON.parse(data.toString()))
           })
@@ -1075,9 +995,7 @@ class VSCodeServer {
           content: [
             {
               type: 'text',
-              text: `Successfully opened project in a ${
-                newWindow ? 'new' : 'current'
-              } VS Code window: ${projectPath}`,
+              text: `Successfully opened project in a ${newWindow ? 'new' : 'current'} VS Code window: ${projectPath}`,
             },
           ],
         }
@@ -1125,9 +1043,7 @@ class VSCodeServer {
 
       // Format the list of projects
       const projectPaths = Object.keys(registry)
-      const projectsList = projectPaths
-        .map((path, index) => `${index + 1}. ${path}`)
-        .join('\n')
+      const projectsList = projectPaths.map((path, index) => `${index + 1}. ${path}`).join('\n')
 
       return {
         content: [
@@ -1163,7 +1079,7 @@ class VSCodeServer {
 // Export the startServer function for CLI usage
 export function startServer() {
   const server = new VSCodeServer()
-  server.start().catch(async (error) => {
+  server.start().catch(async error => {
     await logToFile('Failed to start server:', error)
     process.exit(1)
   })
