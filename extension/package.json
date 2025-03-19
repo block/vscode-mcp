@@ -21,7 +21,25 @@
   ],
   "main": "dist/extension.js",
   "contributes": {
-    "commands": []
+    "commands": [],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "mcp-sidebar",
+          "title": "MCP Companion",
+          "icon": "$(settings-gear)"
+        }
+      ]
+    },
+    "views": {
+      "mcp-sidebar": [
+        {
+          "id": "mcp-settings",
+          "name": "Settings",
+          "type": "webview"
+        }
+      ]
+    }
   },
   "scripts": {
     "vscode:prepublish": "npm run package",

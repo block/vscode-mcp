@@ -1,5 +1,6 @@
 import * as vscode from 'vscode'
-import { BaseResponse, DiffResponse } from './types'
+import { DiffResponse } from './types'
+import { SettingsManager } from './settingsManager'
 
 /**
  * Manages the diff view state and UI elements
@@ -9,8 +10,10 @@ export class DiffManager {
   private acceptButton: vscode.StatusBarItem | undefined
   private rejectButton: vscode.StatusBarItem | undefined
   private originalFilePath: string | undefined
+  private settingsManager: SettingsManager
 
   constructor(private readonly context: vscode.ExtensionContext) {
+    this.settingsManager = SettingsManager.getInstance(context)
     this.registerCommands()
   }
 
@@ -93,7 +96,7 @@ export class DiffManager {
     this.acceptButton.show()
     this.rejectButton.show()
 
-    // Show diff
+    // Show diff in the active editor group
     await vscode.commands.executeCommand(
       'vscode.diff',
       vscode.Uri.file(originalPath),
