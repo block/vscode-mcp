@@ -3,8 +3,8 @@ name: Publish VSCode extension
 on:
   push:
     paths:
-      - "extension/**"
-      - ".github/workflows/extension-vsce-publish.yml"
+      - 'extension/**'
+      - '.github/workflows/extension-vsce-publish.yml'
   workflow_dispatch:
 
 defaults:
