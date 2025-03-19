@@ -1,14 +1,10 @@
-# This workflow will run tests using node and then publish a package to GitHub Packages when a release is created
-# For more information see: https://docs.github.com/en/actions/publishing-packages/publishing-nodejs-packages
-
-name: Server - Node.js Package
+name: Publish npm package
 
 on:
   push:
-    tags:
-      - "v*" # Trigger only on tags that start with 'v', e.g., v1.0.0
-  # release:
-  #   types: [created]
+    paths:
+      - "server/**"
+      - ".github/workflows/server-npm-publish.yml"
   workflow_dispatch:
 
 defaults:
@@ -18,6 +14,7 @@ defaults:
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -45,7 +42,20 @@ jobs:
       - name: Clean install dependencies
         run: npm ci
 
+      - name: Check if version exists
+        id: version-check
+        run: |
+          PKG_VERSION=$(node -p "require('./package.json').version")
+          if npm view . versions | grep -q "\"$PKG_VERSION\""; then
+            echo "Version $PKG_VERSION already exists in npm registry"
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "Version $PKG_VERSION does not exist in npm registry"
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
       - name: Publish to npm
+        if: steps.version-check.outputs.exists != 'true'
         run: npm publish
         env:
           NODE_AUTH_TOKEN: ${{secrets.NPM_PUBLISH_TOKEN}}

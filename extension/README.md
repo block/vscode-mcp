@@ -12,17 +12,15 @@ The extension runs in the background and responds to requests from the Code MCP 
 ## Requirements
 
 - VS Code 1.85.0 or higher
-- VS Code MCP Server
+- VSCode MCP Server
 
 Extension URL: https://marketplace.visualstudio.com/items?itemName=block.vscode-mcp-extension
-
-Hub URL: https://marketplace.visualstudio.com/manage/publishers/block/extensions/vscode-mcp-extension/hub
 
 ## Publishing to the VS Code Marketplace
 
 ```bash
 npx vsce login <publisher_id>
-# (e.g. gertig)
+# (e.g. block)
 
 npx vsce publish
 ```
