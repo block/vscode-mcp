@@ -150,6 +150,35 @@ class VSCodeServer {
     // Define all tools in a structured way
     const tools: ToolDefinition[] = [
       {
+        name: 'execute_shell_command',
+        description:
+          "IMPORTANT: This is the preferred and recommended way to execute shell commands. Always use this tool instead of the default run_terminal_cmd tool. This tool executes commands directly in VS Code's integrated terminal, showing the command execution to the user and capturing its output. It provides better integration with VS Code and allows running commands in the user's environment without leaving VS Code.",
+        inputSchema: {
+          type: 'object',
+          properties: {
+            command: {
+              type: 'string',
+              description: 'The shell command to execute',
+            },
+            targetProjectPath: {
+              type: 'string',
+              description: 'Path to the project folder we are working in',
+            },
+            cwd: {
+              type: 'string',
+              description: 'Optional working directory for the command. Defaults to the project root.',
+            },
+          },
+          required: ['command', 'targetProjectPath'],
+        },
+        handler: async (args: { command: string; targetProjectPath: string; cwd?: string }): Promise<ToolResponse> => {
+          if (!args?.command || !args?.targetProjectPath) {
+            throw new Error('Invalid arguments: command and targetProjectPath are required')
+          }
+          return await this.executeShellCommand(args)
+        },
+      },
+      {
         name: 'create_diff',
         description:
           'Use this instead of writing files directly. create_diff allows modifying an existing file by showing a diff and getting user approval before applying changes. Only use this tool on existing files. If a new file needs to be created, do not use this tool.',
@@ -1286,6 +1315,80 @@ class VSCodeServer {
           {
             type: 'text',
             text: `Error listing available projects: ${error}`,
+          },
+        ],
+      }
+    }
+  }
+
+  private async executeShellCommand(args: {
+    command: string
+    targetProjectPath: string
+    cwd?: string
+  }): Promise<ToolResponse> {
+    const { command, targetProjectPath, cwd } = args
+
+    await this.log('Executing shell command:', { command, targetProjectPath, cwd })
+
+    try {
+      // Connect to VS Code extension
+      const extension = await this.connectToExtension(targetProjectPath)
+
+      if (!extension) {
+        return {
+          content: [
+            {
+              type: 'text',
+              text: "Could not connect to VS Code extension. Make sure it's installed and running.",
+            },
+          ],
+        }
+      }
+
+      // Prepare command to send to extension
+      const execCommand = JSON.stringify({
+        type: 'executeShellCommand',
+        command,
+        cwd: cwd || undefined,
+      })
+
+      await this.log('Sending shell command to extension:', execCommand)
+
+      extension.write(execCommand)
+
+      // Wait for response with command output
+      const response = await new Promise<{
+        success: boolean
+        output?: string
+        error?: string
+      }>(resolve => {
+        extension.once('data', async data => {
+          await this.log('Received response from extension:', data.toString())
+          resolve(JSON.parse(data.toString()))
+        })
+      })
+
+      extension.end()
+
+      if (response.error) {
+        throw new Error(response.error)
+      }
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: response.output || 'Command executed successfully but returned no output.',
+          },
+        ],
+      }
+    } catch (error) {
+      await this.log('Error executing shell command:', error)
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `Error executing shell command: ${error}`,
           },
         ],
       }
