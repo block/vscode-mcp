@@ -15,6 +15,7 @@ import {
   WorkspaceResponse,
 } from './types'
 import { DiffManager } from './diffManager'
+import { SettingsManager } from './settingsManager'
 
 // Define a type for command handlers with proper mapping between command types and handler parameter types
 type CommandHandlerMap = {
@@ -32,8 +33,10 @@ type CommandHandlerMap = {
 export class CommandHandler {
   // Command handler registry
   private commandHandlers: Partial<CommandHandlerMap> = {}
+  private settingsManager: SettingsManager
 
   constructor(private readonly diffManager: DiffManager) {
+    this.settingsManager = SettingsManager.getInstance()
     this.registerCommandHandlers()
   }
 
@@ -68,21 +71,37 @@ export class CommandHandler {
 
       let response: BaseResponse
 
-      // Get the handler for this command type
-      const handler = this.commandHandlers[command.type] as Function
+      // Check settings before processing commands
+      const settings = this.settingsManager.getSettings()
 
-      if (handler) {
-        // Special case for showDiff which needs the socket
-        if (command.type === 'showDiff') {
-          response = await handler(command, socket)
-        } else {
-          response = await handler(command)
-        }
-      } else {
-        // This should never happen with proper typing
+      // Handle disabled features with auto-responses
+      if (command.type === 'showDiff' && !settings.diffing.enabled) {
+        console.log('MCP Companion: Diffing is disabled in settings - auto-applying changes')
+        vscode.window.showInformationMessage('Diffing is disabled in MCP settings - changes auto-applied')
+        response = this.diffManager.createDiffResponse(true)
+      } else if (command.type === 'open' && !settings.fileOpening.enabled) {
+        console.log('MCP Companion: File opening is disabled in settings')
         response = {
           success: false,
-          error: `Unknown command type: ${command.type}`,
+          error: 'File opening is disabled in MCP settings',
+        }
+      } else {
+        // Get the handler for this command type
+        const handler = this.commandHandlers[command.type] as Function
+
+        if (handler) {
+          // Special case for showDiff which needs the socket
+          if (command.type === 'showDiff') {
+            response = await handler(command, socket)
+          } else {
+            response = await handler(command)
+          }
+        } else {
+          // This should never happen with proper typing
+          response = {
+            success: false,
+            error: `Unknown command type: ${command.type}`,
+          }
         }
       }
 
