@@ -1,7 +1,7 @@
 import * as vscode from 'vscode'
 import * as net from 'net'
 import {
-  Command,
+
   CommandType,
   CommandUnion,
   ShowDiffCommand,
@@ -13,6 +13,8 @@ import {
   BaseResponse,
   DiffResponse,
   WorkspaceResponse,
+  ActiveTabsResponse,
+
 } from './types'
 import { DiffManager } from './diffManager'
 import { SettingsManager } from './settingsManager'
@@ -25,6 +27,7 @@ type CommandHandlerMap = {
   getCurrentWorkspace: (command: GetCurrentWorkspaceCommand) => Promise<WorkspaceResponse>
   ping: (command: PingCommand) => BaseResponse
   focusWindow: (command: FocusWindowCommand) => Promise<BaseResponse>
+  getActiveTabs: (command: { type: 'getActiveTabs'; includeContent?: boolean }) => Promise<ActiveTabsResponse>
 }
 
 /**
@@ -51,6 +54,7 @@ export class CommandHandler {
     this.registerHandler('getCurrentWorkspace', this.handleGetCurrentWorkspace.bind(this))
     this.registerHandler('ping', this.handlePing.bind(this))
     this.registerHandler('focusWindow', this.handleFocusWindow.bind(this))
+    this.registerHandler('getActiveTabs', this.handleGetActiveTabs.bind(this))
   }
 
   /**
@@ -234,6 +238,58 @@ export class CommandHandler {
       return {
         success: false,
         error: error instanceof Error ? error.message : String(error),
+      }
+    }
+  }
+
+  /**
+   * Gets information about all active editor tabs
+   * @param command The getActiveTabs command
+   * @returns Response with tabs information
+   */
+  private async handleGetActiveTabs(command: { type: 'getActiveTabs'; includeContent?: boolean }): Promise<ActiveTabsResponse> {
+    try {
+      // Get all visible editors
+      const editors = vscode.window.visibleTextEditors
+      const activeEditor = vscode.window.activeTextEditor
+      
+      // Process each editor to gather information
+      const tabs = await Promise.all(
+        editors.map(async (editor) => {
+          const document = editor.document
+          const isActive = editor === activeEditor
+          const filePath = document.uri.fsPath
+          
+          // Create tab info object
+          const tabInfo: {
+            filePath: string
+            isActive: boolean
+            languageId?: string
+            content?: string
+          } = {
+            filePath,
+            isActive,
+            languageId: document.languageId,
+          }
+          
+          // Include content if requested
+          if (command.includeContent) {
+            tabInfo.content = document.getText()
+          }
+          
+          return tabInfo
+        })
+      )
+      
+      return {
+        success: true,
+        tabs,
+      }
+    } catch (error) {
+      console.error('Error getting active tabs:', error)
+      return {
+        success: false,
+        error: `Error getting active tabs: ${error}`
       }
     }
   }

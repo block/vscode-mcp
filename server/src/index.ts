@@ -393,6 +393,114 @@ class VSCodeServer {
           return await this.listAvailableProjects()
         },
       },
+      {
+        name: 'get_active_tabs',
+        description: 'Retrieves information about currently open tabs in VS Code to provide context for the AI agent.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            targetProjectPath: {
+              type: 'string',
+              description: 'Path to the project folder we are working in',
+            },
+            includeContent: {
+              type: 'boolean',
+              description: 'Whether to include the file content of each tab (may be large)',
+              default: false,
+            },
+          },
+          required: ['targetProjectPath'],
+        },
+        handler: async (args: { targetProjectPath: string; includeContent?: boolean }): Promise<ToolResponse> => {
+          if (!args?.targetProjectPath) {
+            throw new Error('Invalid arguments: targetProjectPath is required')
+          }
+          
+          try {
+            const extension = await this.connectToExtension(args.targetProjectPath)
+            if (!extension) {
+              throw new Error('Could not connect to VS Code extension for the specified project path')
+            }
+            
+            const command = JSON.stringify({
+              type: 'getActiveTabs',
+              includeContent: !!args.includeContent
+            })
+            
+            await this.log('Sending getActiveTabs command to extension:', command)
+            extension.write(command)
+            
+            // Wait for response
+            const response = await new Promise<{
+              success: boolean;
+              tabs?: Array<{
+                filePath: string;
+                isActive: boolean;
+                languageId?: string;
+                content?: string;
+              }>;
+              error?: string;
+            }>(resolve => {
+              extension.once('data', async data => {
+                await this.log('Received active tabs response:', data.toString())
+                resolve(JSON.parse(data.toString()))
+              })
+            })
+            
+            extension.end()
+            
+            if (response.error) {
+              throw new Error(response.error)
+            }
+            
+            if (!response.success || !response.tabs) {
+              return {
+                content: [
+                  {
+                    type: 'text',
+                    text: 'Failed to retrieve active tabs from VS Code.'
+                  }
+                ]
+              }
+            }
+            
+            // Format response as readable text
+            const tabsInfo = response.tabs.map(tab => {
+              const activeMarker = tab.isActive ? ' (ACTIVE)' : '';
+              const langInfo = tab.languageId ? ` [${tab.languageId}]` : '';
+              let result = `- ${tab.filePath}${activeMarker}${langInfo}`;
+              
+              if (args.includeContent && tab.content) {
+                // Only include first few lines if content is large
+                const previewLines = tab.content.split('\n').slice(0, 5);
+                const hasMoreLines = tab.content.split('\n').length > 5;
+                result += `\n  Preview:\n  ${previewLines.join('\n  ')}${hasMoreLines ? '\n  ...' : ''}`;
+              }
+              
+              return result;
+            }).join('\n');
+            
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: `Currently open tabs in VS Code:\n\n${tabsInfo}`
+                }
+              ]
+            }
+          } catch (error) {
+            await this.log('Error retrieving active tabs:', error)
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: `Error retrieving active tabs: ${error}`
+                }
+              ]
+            }
+          }
+        },
+      },
     ]
 
     // Set up tool handlers
