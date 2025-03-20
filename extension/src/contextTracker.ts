@@ -1,5 +1,6 @@
 import * as vscode from 'vscode'
 import * as path from 'path'
+import { EditorUtils } from './editorUtils'
 
 /**
  * Tree data provider for showing context-included files
@@ -51,6 +52,7 @@ export class ContextTracker {
   private decorationType: vscode.TextEditorDecorationType
   private treeDataProvider: ContextFilesProvider
   private statusBarItem: vscode.StatusBarItem
+  private _disposables: vscode.Disposable[] = []
   
   constructor(context: vscode.ExtensionContext) {
     this.context = context
@@ -86,8 +88,11 @@ export class ContextTracker {
     context.subscriptions.push(
       vscode.commands.registerCommand('mcp-companion.toggleFileContext', (uri?: vscode.Uri) => {
         console.log('Toggle file context command triggered');
-        if (!uri && vscode.window.activeTextEditor) {
-          uri = vscode.window.activeTextEditor.document.uri;
+        if (!uri) {
+          const activeEditor = EditorUtils.getWorkspaceActiveEditor();
+          if (activeEditor) {
+            uri = activeEditor.document.uri;
+          }
         }
         
         if (uri) {
@@ -98,8 +103,11 @@ export class ContextTracker {
       
       vscode.commands.registerCommand('mcp-companion.toggleFileContextOn', (uri?: vscode.Uri) => {
         console.log('Toggle file context (on→off) command triggered');
-        if (!uri && vscode.window.activeTextEditor) {
-          uri = vscode.window.activeTextEditor.document.uri
+        if (!uri) {
+          const activeEditor = EditorUtils.getWorkspaceActiveEditor();
+          if (activeEditor) {
+            uri = activeEditor.document.uri;
+          }
         }
         
         if (uri) {
@@ -109,9 +117,9 @@ export class ContextTracker {
       
       vscode.commands.registerCommand('mcp-companion.alwaysVisibleToggle', () => {
         console.log('Always visible toggle command triggered');
-        const editor = vscode.window.activeTextEditor;
-        if (editor) {
-          const uri = editor.document.uri;
+        const activeEditor = EditorUtils.getWorkspaceActiveEditor();
+        if (activeEditor) {
+          const uri = activeEditor.document.uri;
           this.toggleFileContext(uri);
         } else {
           vscode.window.showInformationMessage('No active file to toggle AI context');
@@ -120,8 +128,11 @@ export class ContextTracker {
       
       vscode.commands.registerCommand('mcp-companion.includeInContext', (uri?: vscode.Uri) => {
         console.log('Include in context command triggered');
-        if (!uri && vscode.window.activeTextEditor) {
-          uri = vscode.window.activeTextEditor.document.uri
+        if (!uri) {
+          const activeEditor = EditorUtils.getWorkspaceActiveEditor();
+          if (activeEditor) {
+            uri = activeEditor.document.uri;
+          }
         }
         
         if (uri) {
@@ -131,8 +142,11 @@ export class ContextTracker {
       
       vscode.commands.registerCommand('mcp-companion.excludeFromContext', (uri?: vscode.Uri) => {
         console.log('Exclude from context command triggered');
-        if (!uri && vscode.window.activeTextEditor) {
-          uri = vscode.window.activeTextEditor.document.uri
+        if (!uri) {
+          const activeEditor = EditorUtils.getWorkspaceActiveEditor();
+          if (activeEditor) {
+            uri = activeEditor.document.uri;
+          }
         }
         
         if (uri) {
@@ -142,9 +156,9 @@ export class ContextTracker {
       
       vscode.commands.registerCommand('mcp-companion.debugContextInfo', () => {
         console.log('Debug context info command triggered');
-        const editor = vscode.window.activeTextEditor;
-        if (editor) {
-          const filePath = editor.document.uri.fsPath;
+        const activeEditor = EditorUtils.getWorkspaceActiveEditor();
+        if (activeEditor) {
+          const filePath = activeEditor.document.uri.fsPath;
           const isIncluded = this.includedFiles.has(filePath);
           
           // Show detailed debug info
@@ -156,7 +170,7 @@ export class ContextTracker {
           );
           
           // Force update the context value
-          this.updateContextForEditor(editor);
+          this.updateContextForEditor(activeEditor);
         } else {
           vscode.window.showInformationMessage('No active editor to debug');
         }
@@ -187,22 +201,7 @@ export class ContextTracker {
     this.updateContextForAllEditors();
     
     // Listen for editor changes
-    context.subscriptions.push(
-      vscode.window.onDidChangeVisibleTextEditors(() => {
-        console.log('Visible editors changed');
-        this.updateAllEditorDecorations();
-        this.updateContextForAllEditors();
-      }),
-      
-      vscode.window.onDidChangeActiveTextEditor((editor) => {
-        console.log('Active editor changed');
-        this.updateAllEditorDecorations();
-        this.updateStatusBar();
-        if (editor) {
-          this.updateContextForEditor(editor);
-        }
-      })
-    );
+    this.registerEditorListeners();
     
     // Register a basic file system watcher to handle deleted files
     const watcher = vscode.workspace.createFileSystemWatcher('**/*', false, true, false);
@@ -224,17 +223,39 @@ export class ContextTracker {
   }
   
   /**
+   * Listen for changes in visible editors
+   */
+  private registerEditorListeners(): void {
+    // Register editor change listener
+    this._disposables.push(
+      vscode.window.onDidChangeVisibleTextEditors(() => {
+        this.updateAllEditorDecorations()
+        this.updateContextForAllEditors()
+      }),
+      
+      vscode.window.onDidChangeActiveTextEditor((editor) => {
+        this.updateAllEditorDecorations()
+        this.updateStatusBar()
+        if (editor) {
+          this.updateContextForEditor(editor)
+        }
+      })
+    )
+  }
+  
+  /**
    * Updates context variable for all currently visible editors
    */
   private updateContextForAllEditors(): void {
     console.log('Updating context for all editors...');
-    vscode.window.visibleTextEditors.forEach(editor => {
+    EditorUtils.getWorkspaceEditors().forEach(editor => {
       this.updateContextForEditor(editor);
     });
     
     // Also update for active editor specifically (may not be in visible editors)
-    if (vscode.window.activeTextEditor) {
-      this.updateContextForEditor(vscode.window.activeTextEditor);
+    const activeEditor = EditorUtils.getWorkspaceActiveEditor();
+    if (activeEditor) {
+      this.updateContextForEditor(activeEditor);
     }
   }
   
@@ -319,7 +340,19 @@ export class ContextTracker {
   /**
    * Toggles whether a file is included in the AI context
    */
-  private toggleFileContext(uri: vscode.Uri): void {
+  public async toggleFileContext(uri?: vscode.Uri): Promise<void> {
+    // Use active editor if no URI is provided
+    if (!uri) {
+      const activeEditor = EditorUtils.getWorkspaceActiveEditor();
+      if (activeEditor) {
+        uri = activeEditor.document.uri;
+      } else {
+        // No active editor to work with
+        vscode.window.showErrorMessage('No file is currently open');
+        return;
+      }
+    }
+    
     const filePath = uri.fsPath;
     const isIncluded = this.includedFiles.has(filePath);
     
@@ -340,43 +373,49 @@ export class ContextTracker {
   }
   
   /**
-   * Updates the status bar for a file
+   * Updates status bar and decoration for a specific file
+   * @param filePath The file path to update for
    */
-  private updateStatusBarForFile(filePath: string): void {
-    const isIncluded = this.includedFiles.has(filePath)
+  private async updateStatusBarForFile(filePath: string): Promise<void> {
+    const isIncluded = this.isFileIncluded(filePath)
     
-    // Find any editor with this file path
-    const editors = vscode.window.visibleTextEditors.filter(
-      editor => editor.document.uri.fsPath === filePath
-    )
+    // Get editors showing this file
+    const editors = EditorUtils.getEditorsForFile(filePath);
     
-    if (editors.length > 0) {
-      // Apply decorations to all relevant editors
-      editors.forEach(editor => {
-        if (isIncluded) {
-          const lines = editor.document.lineCount
-          const ranges = [new vscode.Range(0, 0, lines - 1, 0)]
-          editor.setDecorations(this.decorationType, ranges)
-        } else {
-          editor.setDecorations(this.decorationType, [])
-        }
-      })
+    if (editors.length === 0) {
+      return
     }
+    
+    // Update decorations for each editor showing this file
+    editors.forEach(editor => {
+      if (isIncluded) {
+        // Apply decorations for included files
+        const firstLineRange = new vscode.Range(0, 0, 0, 0)
+        editor.setDecorations(this.decorationType, [firstLineRange])
+      } else {
+        // Clear decorations for files that are no longer included
+        editor.setDecorations(this.decorationType, [])
+      }
+    })
   }
   
   /**
-   * Updates decorations for all open editors
+   * Update decorations for all open editors
    */
   private updateAllEditorDecorations(): void {
-    vscode.window.visibleTextEditors.forEach(editor => {
+    const editors = EditorUtils.getWorkspaceEditors();
+    
+    // Update decorations for each editor
+    editors.forEach(editor => {
       const filePath = editor.document.uri.fsPath
-      const isIncluded = this.includedFiles.has(filePath)
+      const isIncluded = this.isFileIncluded(filePath)
       
       if (isIncluded) {
-        const lines = editor.document.lineCount
-        const ranges = [new vscode.Range(0, 0, lines - 1, 0)]
-        editor.setDecorations(this.decorationType, ranges)
+        // Apply decorations for included files
+        const firstLineRange = new vscode.Range(0, 0, 0, 0)
+        editor.setDecorations(this.decorationType, [firstLineRange])
       } else {
+        // Clear decorations for files that are no longer included
         editor.setDecorations(this.decorationType, [])
       }
     })
@@ -418,5 +457,60 @@ export class ContextTracker {
     this.updateStatusBar();
     
     vscode.window.showInformationMessage('All files removed from AI context');
+  }
+  
+  /**
+   * Adds a file to be included in AI context
+   * @param uri The URI of the file to add, or undefined to use active editor
+   */
+  public async addFileToContext(uri?: vscode.Uri): Promise<void> {
+    // Use active editor if no URI is provided
+    if (!uri) {
+      const activeEditor = EditorUtils.getWorkspaceActiveEditor();
+      if (activeEditor) {
+        uri = activeEditor.document.uri;
+      } else {
+        // No active editor to work with
+        vscode.window.showErrorMessage('No file is currently open');
+        return;
+      }
+    }
+    
+    this.addToContext(uri);
+  }
+  
+  /**
+   * Shows the context files view
+   */
+  public showContextFiles(): void {
+    // Focus the context files explorer
+    vscode.commands.executeCommand('mcp-sidebar.focus');
+  }
+  
+  /**
+   * Removes a file from being included in AI context
+   * @param uri The URI of the file to remove, or undefined to use active editor
+   */
+  public async removeFileFromContext(uri?: vscode.Uri): Promise<void> {
+    // Use active editor if no URI is provided
+    if (!uri) {
+      const activeEditor = EditorUtils.getWorkspaceActiveEditor();
+      if (activeEditor) {
+        uri = activeEditor.document.uri;
+      } else {
+        // No active editor to work with
+        vscode.window.showErrorMessage('No file is currently open');
+        return;
+      }
+    }
+    
+    this.removeFromContext(uri);
+  }
+  
+  /**
+   * Clears all files from the AI context
+   */
+  public async clearContext(): Promise<void> {
+    this.clearAllContext();
   }
 } 

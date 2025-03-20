@@ -20,6 +20,7 @@ import {
 import { DiffManager } from './diffManager'
 import { SettingsManager } from './settingsManager'
 import { ContextTracker } from './contextTracker'
+import { EditorUtils } from './editorUtils'
 
 // Define a type for command handlers with proper mapping between command types and handler parameter types
 type CommandHandlerMap = {
@@ -257,48 +258,55 @@ export class CommandHandler {
    */
   private async handleGetActiveTabs(command: { type: 'getActiveTabs'; includeContent?: boolean }): Promise<ActiveTabsResponse> {
     try {
-      // Get all visible editors
-      const editors = vscode.window.visibleTextEditors
-      const activeEditor = vscode.window.activeTextEditor
+      // Get editors from the current workspace only
+      const editors = EditorUtils.getWorkspaceEditors();
+      const activeEditor = EditorUtils.getWorkspaceActiveEditor();
       
       // Process each editor to gather information
       const tabs = await Promise.all(
-        editors.map(async (editor) => {
-          const document = editor.document
-          const isActive = editor === activeEditor
-          const filePath = document.uri.fsPath
+        Array.from(editors).map(async (editor) => {
+          const document = editor.document;
+          const isActive = editor === activeEditor;
+          const filePath = document.uri.fsPath;
           
           // Create tab info object
           const tabInfo: {
-            filePath: string
-            isActive: boolean
-            languageId?: string
-            content?: string
+            filePath: string;
+            isActive: boolean;
+            languageId?: string;
+            content?: string;
+            workspaceFolder?: string;
           } = {
             filePath,
             isActive,
             languageId: document.languageId,
-          }
+          };
           
           // Include content if requested
           if (command.includeContent) {
-            tabInfo.content = document.getText()
+            tabInfo.content = document.getText();
           }
           
-          return tabInfo
+          // Add workspace folder info
+          const workspaceFolder = vscode.workspace.getWorkspaceFolder(document.uri);
+          if (workspaceFolder) {
+            tabInfo.workspaceFolder = workspaceFolder.uri.fsPath;
+          }
+          
+          return tabInfo;
         })
-      )
+      );
       
       return {
         success: true,
         tabs,
-      }
+      };
     } catch (error) {
-      console.error('Error getting active tabs:', error)
+      console.error('Error getting active tabs:', error);
       return {
         success: false,
         error: `Error getting active tabs: ${error}`
-      }
+      };
     }
   }
 
@@ -310,88 +318,107 @@ export class CommandHandler {
   private async handleGetContextTabs(command: GetContextTabsCommand): Promise<ActiveTabsResponse> {
     try {
       // Get included files list
-      const includedFiles = this.contextTracker.getIncludedFiles()
+      const includedFiles = this.contextTracker.getIncludedFiles();
       
       if (includedFiles.length === 0) {
         return {
           success: true,
           tabs: [],
-        }
+        };
       }
       
-      // Get all editors
-      const editors = vscode.window.visibleTextEditors
-      const activeEditor = vscode.window.activeTextEditor
+      // Get workspace editors only
+      const editors = EditorUtils.getWorkspaceEditors();
+      const activeEditor = EditorUtils.getWorkspaceActiveEditor();
       
       // Map of file paths to document instances
-      const openDocuments = new Map<string, vscode.TextDocument>()
+      const openDocuments = new Map<string, vscode.TextDocument>();
       
       // First collect all open documents
-      editors.forEach(editor => {
-        openDocuments.set(editor.document.uri.fsPath, editor.document)
-      })
+      Array.from(editors).forEach(editor => {
+        openDocuments.set(editor.document.uri.fsPath, editor.document);
+      });
+      
+      // Only process files that are in the current workspace
+      const workspaceFolders = vscode.workspace.workspaceFolders || [];
+      const workspacePaths = workspaceFolders.map(folder => folder.uri.fsPath);
+      
+      // Filter included files to only those in the current workspace
+      const workspaceIncludedFiles = includedFiles.filter(filePath => 
+        workspacePaths.some(wsPath => 
+          filePath === wsPath || filePath.startsWith(wsPath + require('path').sep)
+        )
+      );
       
       // Process included files, loading them if needed
       const tabs = await Promise.all(
-        includedFiles.map(async (filePath) => {
-          let document: vscode.TextDocument
-          let isOpen = openDocuments.has(filePath)
+        workspaceIncludedFiles.map(async (filePath) => {
+          let document: vscode.TextDocument;
+          let isOpen = openDocuments.has(filePath);
           
           // If the file is already open, use that instance
           if (isOpen) {
-            document = openDocuments.get(filePath)!
+            document = openDocuments.get(filePath)!;
           } else {
             // Otherwise, load it temporarily
             try {
-              document = await vscode.workspace.openTextDocument(filePath)
+              document = await vscode.workspace.openTextDocument(filePath);
             } catch (error) {
-              console.error(`Could not load file: ${filePath}`, error)
-              return null
+              console.error(`Could not load file: ${filePath}`, error);
+              return null;
             }
           }
           
           // Create tab info object
           const tabInfo: {
-            filePath: string
-            isActive: boolean
-            isOpen: boolean
-            languageId?: string
-            content?: string
+            filePath: string;
+            isActive: boolean;
+            isOpen: boolean;
+            languageId?: string;
+            content?: string;
+            workspaceFolder?: string;
           } = {
             filePath,
             isActive: activeEditor?.document.uri.fsPath === filePath,
             isOpen,
             languageId: document.languageId,
-          }
+          };
           
           // Include content if requested
           if (command.includeContent) {
-            tabInfo.content = document.getText()
+            tabInfo.content = document.getText();
           }
           
-          return tabInfo
+          // Add workspace folder info
+          const workspaceFolder = vscode.workspace.getWorkspaceFolder(document.uri);
+          if (workspaceFolder) {
+            tabInfo.workspaceFolder = workspaceFolder.uri.fsPath;
+          }
+          
+          return tabInfo;
         })
-      )
+      );
       
       // Filter out null entries (files that couldn't be loaded)
       const validTabs = tabs.filter(tab => tab !== null) as Array<{
-        filePath: string
-        isActive: boolean
-        isOpen: boolean
-        languageId?: string
-        content?: string
-      }>
+        filePath: string;
+        isActive: boolean;
+        isOpen: boolean;
+        languageId?: string;
+        content?: string;
+        workspaceFolder?: string;
+      }>;
       
       return {
         success: true,
         tabs: validTabs,
-      }
+      };
     } catch (error) {
-      console.error('Error getting context tabs:', error)
+      console.error('Error getting context tabs:', error);
       return {
         success: false,
         error: `Error getting context tabs: ${error}`
-      }
+      };
     }
   }
 }
