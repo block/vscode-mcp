@@ -49,11 +49,11 @@ jobs:
             echo "Version $VERSION is new and can be published"
           fi
 
-      - name: Publish to Visual Studio Marketplace
-        if: success()
-        run: npm run publish-extension
-        env:
-          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+      # - name: Publish to Visual Studio Marketplace
+      #   if: success()
+      #   run: npm run publish-extension
+      #   env:
+      #     VSCE_PAT: ${{ secrets.VSCE_PAT }}
 
       # - name: Create GitHub Release
       #   uses: softprops/action-gh-release@v1
