@@ -21,18 +21,73 @@
   ],
   "main": "dist/extension.js",
   "contributes": {
-    "commands": [],
+
+    "commands": [
+      {
+        "command": "mcp-companion.toggleFileContext",
+        "title": "Toggle AI Context Inclusion",
+        "category": "MCP",
+        "icon": "$(megaphone)"
+      },
+      {
+        "command": "mcp-companion.showContextFiles",
+        "title": "Show AI Context Files",
+        "category": "MCP",
+        "icon": "$(list-tree)"
+      },
+      {
+        "command": "mcp-companion.clearAllContext",
+        "title": "Clear All AI Context Files",
+        "category": "MCP",
+        "icon": "$(clear-all)"
+      },
+      {
+        "command": "mcp-companion.removeFromContext",
+        "title": "Remove from AI Context",
+        "category": "MCP",
+        "icon": "$(close)"
+      }
+    ],
+    "menus": {
+      "editor/title": [
+        {
+          "command": "mcp-companion.toggleFileContext",
+          "group": "navigation@1",
+          "when": "editorIsOpen"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "mcp-companion.clearAllContext",
+          "when": "view == contextFilesExplorer",
+          "group": "navigation"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "mcp-companion.removeFromContext",
+          "when": "viewItem == contextFile",
+          "group": "inline"
+        }
+      ]
+    },
     "viewsContainers": {
       "activitybar": [
         {
           "id": "mcp-sidebar",
           "title": "MCP Companion",
-          "icon": "$(settings-gear)"
+          "icon": "$(symbol-keyword)"
         }
       ]
     },
     "views": {
       "mcp-sidebar": [
+        {
+          "id": "contextFilesExplorer",
+          "name": "AI Context Files",
+          "icon": "$(symbol-file)",
+          "contextualTitle": "AI Context Files"
+        },
         {
           "id": "mcp-settings",
           "name": "Settings",
@@ -67,5 +122,5 @@
     "webpack": "^5.88.0",
     "webpack-cli": "^5.1.4"
   },
-  "workspaces": null
+  "workspaces": []
 }

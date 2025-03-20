@@ -1,7 +1,7 @@
 import * as vscode from 'vscode'
 import * as net from 'net'
 import {
-  Command,
+
   CommandType,
   CommandUnion,
   ShowDiffCommand,
@@ -13,9 +13,14 @@ import {
   BaseResponse,
   DiffResponse,
   WorkspaceResponse,
+  ActiveTabsResponse,
+  GetContextTabsCommand,
+
 } from './types'
 import { DiffManager } from './diffManager'
 import { SettingsManager } from './settingsManager'
+import { ContextTracker } from './contextTracker'
+import { EditorUtils } from './editorUtils'
 
 // Define a type for command handlers with proper mapping between command types and handler parameter types
 type CommandHandlerMap = {
@@ -25,6 +30,8 @@ type CommandHandlerMap = {
   getCurrentWorkspace: (command: GetCurrentWorkspaceCommand) => Promise<WorkspaceResponse>
   ping: (command: PingCommand) => BaseResponse
   focusWindow: (command: FocusWindowCommand) => Promise<BaseResponse>
+  getActiveTabs: (command: { type: 'getActiveTabs'; includeContent?: boolean }) => Promise<ActiveTabsResponse>
+  getContextTabs: (command: GetContextTabsCommand) => Promise<ActiveTabsResponse>
 }
 
 /**
@@ -35,8 +42,12 @@ export class CommandHandler {
   private commandHandlers: Partial<CommandHandlerMap> = {}
   private settingsManager: SettingsManager
 
-  constructor(private readonly diffManager: DiffManager) {
+  private contextTracker: ContextTracker
+  
+  constructor(private readonly diffManager: DiffManager, contextTracker: ContextTracker) {
     this.settingsManager = SettingsManager.getInstance()
+    this.diffManager = diffManager
+    this.contextTracker = contextTracker
     this.registerCommandHandlers()
   }
 
@@ -51,6 +62,8 @@ export class CommandHandler {
     this.registerHandler('getCurrentWorkspace', this.handleGetCurrentWorkspace.bind(this))
     this.registerHandler('ping', this.handlePing.bind(this))
     this.registerHandler('focusWindow', this.handleFocusWindow.bind(this))
+    this.registerHandler('getActiveTabs', this.handleGetActiveTabs.bind(this))
+    this.registerHandler('getContextTabs', this.handleGetContextTabs.bind(this))
   }
 
   /**
@@ -235,6 +248,177 @@ export class CommandHandler {
         success: false,
         error: error instanceof Error ? error.message : String(error),
       }
+    }
+  }
+
+  /**
+   * Gets information about all active editor tabs
+   * @param command The getActiveTabs command
+   * @returns Response with tabs information
+   */
+  private async handleGetActiveTabs(command: { type: 'getActiveTabs'; includeContent?: boolean }): Promise<ActiveTabsResponse> {
+    try {
+      // Get editors from the current workspace only
+      const editors = EditorUtils.getWorkspaceEditors();
+      const activeEditor = EditorUtils.getWorkspaceActiveEditor();
+      
+      // Process each editor to gather information
+      const tabs = await Promise.all(
+        Array.from(editors).map(async (editor) => {
+          const document = editor.document;
+          const isActive = editor === activeEditor;
+          const filePath = document.uri.fsPath;
+          
+          // Create tab info object
+          const tabInfo: {
+            filePath: string;
+            isActive: boolean;
+            languageId?: string;
+            content?: string;
+            workspaceFolder?: string;
+          } = {
+            filePath,
+            isActive,
+            languageId: document.languageId,
+          };
+          
+          // Include content if requested
+          if (command.includeContent) {
+            tabInfo.content = document.getText();
+          }
+          
+          // Add workspace folder info
+          const workspaceFolder = vscode.workspace.getWorkspaceFolder(document.uri);
+          if (workspaceFolder) {
+            tabInfo.workspaceFolder = workspaceFolder.uri.fsPath;
+          }
+          
+          return tabInfo;
+        })
+      );
+      
+      return {
+        success: true,
+        tabs,
+      };
+    } catch (error) {
+      console.error('Error getting active tabs:', error);
+      return {
+        success: false,
+        error: `Error getting active tabs: ${error}`
+      };
+    }
+  }
+
+  /**
+   * Gets information about tabs specifically marked for AI context
+   * @param command The getContextTabs command
+   * @returns Response with context tabs information
+   */
+  private async handleGetContextTabs(command: GetContextTabsCommand): Promise<ActiveTabsResponse> {
+    try {
+      // Get included files list
+      const includedFiles = this.contextTracker.getIncludedFiles();
+      
+      if (includedFiles.length === 0) {
+        return {
+          success: true,
+          tabs: [],
+        };
+      }
+      
+      // Get workspace editors only
+      const editors = EditorUtils.getWorkspaceEditors();
+      const activeEditor = EditorUtils.getWorkspaceActiveEditor();
+      
+      // Map of file paths to document instances
+      const openDocuments = new Map<string, vscode.TextDocument>();
+      
+      // First collect all open documents
+      Array.from(editors).forEach(editor => {
+        openDocuments.set(editor.document.uri.fsPath, editor.document);
+      });
+      
+      // Only process files that are in the current workspace
+      const workspaceFolders = vscode.workspace.workspaceFolders || [];
+      const workspacePaths = workspaceFolders.map(folder => folder.uri.fsPath);
+      
+      // Filter included files to only those in the current workspace
+      const workspaceIncludedFiles = includedFiles.filter(filePath => 
+        workspacePaths.some(wsPath => 
+          filePath === wsPath || filePath.startsWith(wsPath + require('path').sep)
+        )
+      );
+      
+      // Process included files, loading them if needed
+      const tabs = await Promise.all(
+        workspaceIncludedFiles.map(async (filePath) => {
+          let document: vscode.TextDocument;
+          let isOpen = openDocuments.has(filePath);
+          
+          // If the file is already open, use that instance
+          if (isOpen) {
+            document = openDocuments.get(filePath)!;
+          } else {
+            // Otherwise, load it temporarily
+            try {
+              document = await vscode.workspace.openTextDocument(filePath);
+            } catch (error) {
+              console.error(`Could not load file: ${filePath}`, error);
+              return null;
+            }
+          }
+          
+          // Create tab info object
+          const tabInfo: {
+            filePath: string;
+            isActive: boolean;
+            isOpen: boolean;
+            languageId?: string;
+            content?: string;
+            workspaceFolder?: string;
+          } = {
+            filePath,
+            isActive: activeEditor?.document.uri.fsPath === filePath,
+            isOpen,
+            languageId: document.languageId,
+          };
+          
+          // Include content if requested
+          if (command.includeContent) {
+            tabInfo.content = document.getText();
+          }
+          
+          // Add workspace folder info
+          const workspaceFolder = vscode.workspace.getWorkspaceFolder(document.uri);
+          if (workspaceFolder) {
+            tabInfo.workspaceFolder = workspaceFolder.uri.fsPath;
+          }
+          
+          return tabInfo;
+        })
+      );
+      
+      // Filter out null entries (files that couldn't be loaded)
+      const validTabs = tabs.filter(tab => tab !== null) as Array<{
+        filePath: string;
+        isActive: boolean;
+        isOpen: boolean;
+        languageId?: string;
+        content?: string;
+        workspaceFolder?: string;
+      }>;
+      
+      return {
+        success: true,
+        tabs: validTabs,
+      };
+    } catch (error) {
+      console.error('Error getting context tabs:', error);
+      return {
+        success: false,
+        error: `Error getting context tabs: ${error}`
+      };
     }
   }
 }
