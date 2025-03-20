@@ -101,58 +101,6 @@ export class ContextTracker {
         }
       }),
       
-      vscode.commands.registerCommand('mcp-companion.toggleFileContextOn', (uri?: vscode.Uri) => {
-        console.log('Toggle file context (on→off) command triggered');
-        if (!uri) {
-          const activeEditor = EditorUtils.getWorkspaceActiveEditor();
-          if (activeEditor) {
-            uri = activeEditor.document.uri;
-          }
-        }
-        
-        if (uri) {
-          this.removeFromContext(uri)
-        }
-      }),
-      
-      vscode.commands.registerCommand('mcp-companion.alwaysVisibleToggle', () => {
-        console.log('Always visible toggle command triggered');
-        const activeEditor = EditorUtils.getWorkspaceActiveEditor();
-        if (activeEditor) {
-          const uri = activeEditor.document.uri;
-          this.toggleFileContext(uri);
-        } else {
-          vscode.window.showInformationMessage('No active file to toggle AI context');
-        }
-      }),
-      
-      vscode.commands.registerCommand('mcp-companion.includeInContext', (uri?: vscode.Uri) => {
-        console.log('Include in context command triggered');
-        if (!uri) {
-          const activeEditor = EditorUtils.getWorkspaceActiveEditor();
-          if (activeEditor) {
-            uri = activeEditor.document.uri;
-          }
-        }
-        
-        if (uri) {
-          this.addToContext(uri)
-        }
-      }),
-      
-      vscode.commands.registerCommand('mcp-companion.excludeFromContext', (uri?: vscode.Uri) => {
-        console.log('Exclude from context command triggered');
-        if (!uri) {
-          const activeEditor = EditorUtils.getWorkspaceActiveEditor();
-          if (activeEditor) {
-            uri = activeEditor.document.uri;
-          }
-        }
-        
-        if (uri) {
-          this.removeFromContext(uri)
-        }
-      }),
       
       vscode.commands.registerCommand('mcp-companion.debugContextInfo', () => {
         console.log('Debug context info command triggered');
