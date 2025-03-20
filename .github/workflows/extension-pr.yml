@@ -3,8 +3,8 @@ name: Pull Request Check
 on:
   pull_request:
     paths:
-      - "extension/**"
-      - ".github/workflows/extension-pr.yml"
+      - 'extension/**'
+      - '.github/workflows/extension-pr.yml'
 
 jobs:
   build-and-test:
@@ -20,11 +20,9 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: "npm"
-          cache-dependency-path: "./extension/package-lock.json"
 
       - name: Install dependencies
-        run: npm ci
+        run: npm install
 
       - name: Run linting
         run: npm run lint
@@ -34,6 +32,3 @@ jobs:
 
       - name: Run tests
         run: npm test
-
-      - name: Run tests with coverage
-        run: npm run test:coverage 
