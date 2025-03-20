@@ -64,6 +64,9 @@ describe('SettingsManager', () => {
       fileOpening: {
         enabled: true,
       },
+      shellCommands: {
+        enabled: true,
+      },
     })
 
     expect(mockGlobalState.get).toHaveBeenCalledWith('mcpSettings')
@@ -75,6 +78,9 @@ describe('SettingsManager', () => {
         enabled: false,
       },
       fileOpening: {
+        enabled: true,
+      },
+      shellCommands: {
         enabled: true,
       },
     }
@@ -94,6 +100,9 @@ describe('SettingsManager', () => {
         enabled: false,
       },
       fileOpening: {
+        enabled: false,
+      },
+      shellCommands: {
         enabled: false,
       },
     }
