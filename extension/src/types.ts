@@ -1,7 +1,7 @@
 import * as vscode from 'vscode'
 
 // Command type as a union of string literals
-export type CommandType = 'showDiff' | 'open' | 'openFolder' | 'getCurrentWorkspace' | 'ping' | 'focusWindow' | 'getActiveTabs'
+export type CommandType = 'showDiff' | 'open' | 'openFolder' | 'getCurrentWorkspace' | 'ping' | 'focusWindow' | 'getActiveTabs' | 'getContextTabs'
 
 // Base command interface
 export interface Command {
@@ -45,6 +45,11 @@ export interface GetActiveTabsCommand extends Command {
   includeContent?: boolean
 }
 
+export interface GetContextTabsCommand extends Command {
+  type: 'getContextTabs'
+  includeContent?: boolean
+}
+
 // Type union of all possible commands
 export type CommandUnion =
   | ShowDiffCommand
@@ -54,6 +59,7 @@ export type CommandUnion =
   | PingCommand
   | FocusWindowCommand
   | GetActiveTabsCommand
+  | GetContextTabsCommand
 
 // Response interfaces
 export interface BaseResponse {
@@ -107,4 +113,8 @@ export function isFocusWindowCommand(command: Command): command is FocusWindowCo
 
 export function isGetActiveTabsCommand(command: Command): command is GetActiveTabsCommand {
   return command.type === 'getActiveTabs'
+}
+
+export function isGetContextTabsCommand(command: Command): command is GetContextTabsCommand {
+  return command.type === 'getContextTabs'
 }

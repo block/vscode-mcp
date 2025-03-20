@@ -4,6 +4,7 @@ import { CommandHandler } from './commandHandler'
 import { SocketServer } from './socketServer'
 import { SettingsViewProvider } from './settingsView'
 import { SettingsManager } from './settingsManager'
+import { ContextTracker } from './contextTracker'
 
 /**
  * Activates the extension
@@ -16,8 +17,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   SettingsManager.getInstance(context)
 
   // Initialize the components
+  const contextTracker = new ContextTracker(context)
   const diffManager = new DiffManager(context)
-  const commandHandler = new CommandHandler(diffManager)
+  const commandHandler = new CommandHandler(diffManager, contextTracker)
   const socketServer = new SocketServer(commandHandler, context)
 
   // Register the settings view panel

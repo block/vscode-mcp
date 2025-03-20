@@ -21,9 +21,103 @@
   ],
   "main": "dist/extension.js",
   "contributes": {
-    "commands": [],
+
+    "commands": [
+      {
+        "command": "mcp-companion.toggleFileContext",
+        "title": "Toggle AI Context Inclusion",
+        "category": "MCP",
+        "icon": "$(megaphone)"
+      },
+      {
+        "command": "mcp-companion.toggleFileContextOn",
+        "title": "Remove from AI Context",
+        "category": "MCP",
+        "icon": {
+          "light": "$(circle-filled)",
+          "dark": "$(circle-filled)"
+        }
+      },
+      {
+        "command": "mcp-companion.includeInContext",
+        "title": "Include in AI Context",
+        "category": "MCP",
+        "icon": "$(plus-circle)"
+      },
+      {
+        "command": "mcp-companion.excludeFromContext",
+        "title": "Exclude from AI Context",
+        "category": "MCP",
+        "icon": "$(circle-filled)"
+      },
+      {
+        "command": "mcp-companion.debugContextInfo",
+        "title": "Debug AI Context Info",
+        "category": "MCP",
+        "icon": "$(debug-alt)"
+      },
+      {
+        "command": "mcp-companion.showContextFiles",
+        "title": "Show AI Context Files",
+        "category": "MCP",
+        "icon": "$(list-tree)"
+      },
+      {
+        "command": "mcp-companion.clearAllContext",
+        "title": "Clear All AI Context Files",
+        "category": "MCP",
+        "icon": "$(clear-all)"
+      },
+      {
+        "command": "mcp-companion.removeFromContext",
+        "title": "Remove from AI Context",
+        "category": "MCP",
+        "icon": "$(close)"
+      }
+    ],
+    "menus": {
+      "editor/title": [
+        {
+          "command": "mcp-companion.toggleFileContext",
+          "group": "navigation@1",
+          "when": "editorIsOpen"
+        }
+      ],
+      "explorer/context": [
+        {
+          "command": "mcp-companion.includeInContext",
+          "group": "mcp",
+          "when": "!mcp-companion:fileInContext"
+        },
+        {
+          "command": "mcp-companion.excludeFromContext",
+          "group": "mcp",
+          "when": "mcp-companion:fileInContext"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "mcp-companion.clearAllContext",
+          "when": "view == contextFilesExplorer",
+          "group": "navigation"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "mcp-companion.removeFromContext",
+          "when": "viewItem == contextFile",
+          "group": "inline"
+        }
+      ]
+    },
     "viewsContainers": {
       "activitybar": [
+        {
+          "id": "mcp-explorer",
+          "title": "MCP Companion",
+          "icon": "$(symbol-keyword)"
+        },
+        
         {
           "id": "mcp-sidebar",
           "title": "MCP Companion",
@@ -37,6 +131,14 @@
           "id": "mcp-settings",
           "name": "Settings",
           "type": "webview"
+        }
+      ],
+      "mcp-explorer": [
+        {
+          "id": "contextFilesExplorer",
+          "name": "AI Context Files",
+          "icon": "$(symbol-file)",
+          "contextualTitle": "AI Context Files"
         }
       ]
     }
@@ -67,5 +169,5 @@
     "webpack": "^5.88.0",
     "webpack-cli": "^5.1.4"
   },
-  "workspaces": null
+  "workspaces": []
 }

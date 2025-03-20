@@ -501,6 +501,124 @@ class VSCodeServer {
           }
         },
       },
+      {
+        name: 'get_context_tabs',
+        description: 'Retrieves information about tabs that have been specifically marked for inclusion in AI context using the UI toggle in VS Code.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            targetProjectPath: {
+              type: 'string',
+              description: 'Path to the project folder we are working in',
+            },
+            includeContent: {
+              type: 'boolean',
+              description: 'Whether to include the file content of each tab (may be large)',
+              default: true,
+            },
+          },
+          required: ['targetProjectPath'],
+        },
+        handler: async (args: { targetProjectPath: string; includeContent?: boolean }): Promise<ToolResponse> => {
+          if (!args?.targetProjectPath) {
+            throw new Error('Invalid arguments: targetProjectPath is required')
+          }
+          
+          try {
+            const extension = await this.connectToExtension(args.targetProjectPath)
+            if (!extension) {
+              throw new Error('Could not connect to VS Code extension for the specified project path')
+            }
+            
+            const command = JSON.stringify({
+              type: 'getContextTabs',
+              includeContent: args.includeContent !== false // Default to true
+            })
+            
+            await this.log('Sending getContextTabs command to extension:', command)
+            extension.write(command)
+            
+            // Wait for response
+            const response = await new Promise<{
+              success: boolean;
+              tabs?: Array<{
+                filePath: string;
+                isActive: boolean;
+                isOpen: boolean;
+                languageId?: string;
+                content?: string;
+              }>;
+              error?: string;
+            }>(resolve => {
+              extension.once('data', async data => {
+                await this.log('Received context tabs response:', data.toString())
+                resolve(JSON.parse(data.toString()))
+              })
+            })
+            
+            extension.end()
+            
+            if (response.error) {
+              throw new Error(response.error)
+            }
+            
+            if (!response.success || !response.tabs) {
+              return {
+                content: [
+                  {
+                    type: 'text',
+                    text: 'Failed to retrieve context tabs from VS Code or no tabs are marked for context inclusion.'
+                  }
+                ]
+              }
+            }
+            
+            if (response.tabs.length === 0) {
+              return {
+                content: [
+                  {
+                    type: 'text',
+                    text: 'No files are currently marked for context inclusion. Use the AI badge on VS Code tabs to mark files for context.'
+                  }
+                ]
+              }
+            }
+            
+            // Format response as readable text
+            const tabsInfo = response.tabs.map(tab => {
+              const activeMarker = tab.isActive ? ' (ACTIVE)' : '';
+              const openMarker = tab.isOpen ? '' : ' (NOT OPEN)';
+              const langInfo = tab.languageId ? ` [${tab.languageId}]` : '';
+              let result = `- ${tab.filePath}${activeMarker}${openMarker}${langInfo}`;
+              
+              if (args.includeContent && tab.content) {
+                result += `\n  Content:\n\`\`\`${tab.languageId || ''}\n${tab.content}\n\`\`\``;
+              }
+              
+              return result;
+            }).join('\n\n');
+            
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: `Files marked for AI context inclusion:\n\n${tabsInfo}`
+                }
+              ]
+            }
+          } catch (error) {
+            await this.log('Error retrieving context tabs:', error)
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: `Error retrieving context tabs: ${error}`
+                }
+              ]
+            }
+          }
+        },
+      },
     ]
 
     // Set up tool handlers
