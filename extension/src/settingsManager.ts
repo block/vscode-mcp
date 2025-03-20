@@ -7,6 +7,9 @@ export interface MCPSettings {
   fileOpening: {
     enabled: boolean
   }
+  shellCommands: {
+    enabled: boolean
+  }
 }
 
 export class SettingsManager {
@@ -30,7 +33,21 @@ export class SettingsManager {
   }
 
   public getSettings(): MCPSettings {
-    return this._context.globalState.get<MCPSettings>('mcpSettings') || this.getDefaultSettings()
+    const defaultSettings = this.getDefaultSettings()
+    const savedSettings = this._context.globalState.get<Partial<MCPSettings>>('mcpSettings') || {}
+
+    // Merge default settings with saved settings, ensuring all properties exist
+    return {
+      diffing: {
+        enabled: savedSettings.diffing?.enabled ?? defaultSettings.diffing.enabled,
+      },
+      fileOpening: {
+        enabled: savedSettings.fileOpening?.enabled ?? defaultSettings.fileOpening.enabled,
+      },
+      shellCommands: {
+        enabled: savedSettings.shellCommands?.enabled ?? defaultSettings.shellCommands.enabled,
+      },
+    }
   }
 
   public async updateSettings(settings: MCPSettings): Promise<void> {
@@ -43,6 +60,9 @@ export class SettingsManager {
         enabled: true,
       },
       fileOpening: {
+        enabled: true,
+      },
+      shellCommands: {
         enabled: true,
       },
     }
