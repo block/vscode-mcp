@@ -1,0 +1,34 @@
+name: Pull Request Check
+
+on:
+  pull_request:
+    paths:
+      - 'extension/**'
+      - '.github/workflows/extension-pr.yml'
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./extension
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Run linting
+        run: npm run lint
+
+      - name: Build extension
+        run: npm run compile
+
+      - name: Run tests
+        run: npm test

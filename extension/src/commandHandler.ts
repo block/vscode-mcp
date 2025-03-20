@@ -1,7 +1,6 @@
 import * as vscode from 'vscode'
 import * as net from 'net'
 import {
-  Command,
   CommandType,
   CommandUnion,
   ShowDiffCommand,
@@ -87,7 +86,10 @@ export class CommandHandler {
         }
       } else {
         // Get the handler for this command type
-        const handler = this.commandHandlers[command.type] as Function
+        const handler = this.commandHandlers[command.type] as (
+          command: CommandUnion,
+          socket?: net.Socket
+        ) => Promise<BaseResponse>
 
         if (handler) {
           // Special case for showDiff which needs the socket
@@ -123,7 +125,7 @@ export class CommandHandler {
   /**
    * Handle the showDiff command
    */
-  private async handleShowDiff(command: ShowDiffCommand, socket?: net.Socket): Promise<DiffResponse> {
+  private async handleShowDiff(command: ShowDiffCommand, _socket?: net.Socket): Promise<DiffResponse> {
     const { originalPath, modifiedPath, title } = command
 
     // Show diff and wait for user choice
@@ -191,7 +193,7 @@ export class CommandHandler {
   /**
    * Handle the getCurrentWorkspace command
    */
-  private async handleGetCurrentWorkspace(command: GetCurrentWorkspaceCommand): Promise<WorkspaceResponse> {
+  private async handleGetCurrentWorkspace(_command: GetCurrentWorkspaceCommand): Promise<WorkspaceResponse> {
     console.log('MCP Companion: Getting current workspace')
 
     try {
@@ -212,7 +214,7 @@ export class CommandHandler {
   /**
    * Handle the ping command
    */
-  private handlePing(command: PingCommand): BaseResponse {
+  private handlePing(_command: PingCommand): BaseResponse {
     console.log('MCP Companion: Received ping')
     return { success: true }
   }
@@ -220,7 +222,7 @@ export class CommandHandler {
   /**
    * Handle the focusWindow command
    */
-  private async handleFocusWindow(command: FocusWindowCommand): Promise<BaseResponse> {
+  private async handleFocusWindow(_command: FocusWindowCommand): Promise<BaseResponse> {
     console.log('MCP Companion: Focusing window')
 
     try {
