@@ -113,32 +113,24 @@
     "viewsContainers": {
       "activitybar": [
         {
-          "id": "mcp-explorer",
-          "title": "MCP Companion",
-          "icon": "$(symbol-keyword)"
-        },
-        
-        {
           "id": "mcp-sidebar",
           "title": "MCP Companion",
-          "icon": "$(settings-gear)"
+          "icon": "$(symbol-keyword)"
         }
       ]
     },
     "views": {
       "mcp-sidebar": [
         {
-          "id": "mcp-settings",
-          "name": "Settings",
-          "type": "webview"
-        }
-      ],
-      "mcp-explorer": [
-        {
           "id": "contextFilesExplorer",
           "name": "AI Context Files",
           "icon": "$(symbol-file)",
           "contextualTitle": "AI Context Files"
+        },
+        {
+          "id": "mcp-settings",
+          "name": "Settings",
+          "type": "webview"
         }
       ]
     }

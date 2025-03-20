@@ -163,7 +163,7 @@ export class ContextTracker {
       }),
       
       vscode.commands.registerCommand('mcp-companion.showContextFiles', () => {
-        vscode.commands.executeCommand('contextFilesExplorer.focus');
+        vscode.commands.executeCommand('mcp-sidebar.focus');
       }),
       
       vscode.commands.registerCommand('mcp-companion.removeFromContext', (uri: vscode.Uri) => {
