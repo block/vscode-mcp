@@ -5,6 +5,7 @@ import { SocketServer } from './socketServer'
 import { SettingsViewProvider } from './settingsView'
 import { SettingsManager } from './settingsManager'
 import { ContextTracker } from './contextTracker'
+import * as path from 'path'
 
 /**
  * Activates the extension
@@ -13,13 +14,19 @@ import { ContextTracker } from './contextTracker'
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
   console.log('MCP Companion extension activating...')
 
-  // Initialize the settings manager first
-  SettingsManager.getInstance(context)
+  // Initialize the settings manager
+  const settingsManager = SettingsManager.getInstance(context)
 
-  // Initialize the components
-  const contextTracker = new ContextTracker(context)
+  // Create the context tracker - this will register the context-related commands
+  const contextTracker = new ContextTracker(context, context.globalStorageUri.fsPath)
+
+  // Create the diff manager
   const diffManager = new DiffManager(context)
+
+  // Initialize the command handler
   const commandHandler = new CommandHandler(diffManager, contextTracker)
+
+  // Create the socket server
   const socketServer = new SocketServer(commandHandler, context)
 
   // Register the settings view panel
