@@ -64,4 +64,31 @@ export class EditorUtils {
     const workspaceEditors = this.getWorkspaceEditors();
     return workspaceEditors.find(editor => editor === activeEditor);
   }
+
+  /**
+   * Get the current selection ranges from the active editor
+   * Returns an array of {startLine, endLine} objects (1-based line numbers)
+   */
+  public static getCurrentSelectionRanges(): Array<{startLine: number, endLine: number}> {
+    const activeEditor = this.getWorkspaceActiveEditor()
+    if (!activeEditor) {
+      return []
+    }
+
+    return activeEditor.selections.map(selection => {
+      // Convert to 1-based line numbers for consistency with user expectations
+      return {
+        startLine: selection.start.line + 1,
+        endLine: selection.end.line + 1
+      }
+    })
+  }
+
+  /**
+   * Get the path of the active editor document
+   */
+  public static getActiveEditorPath(): string | undefined {
+    const activeEditor = this.getWorkspaceActiveEditor()
+    return activeEditor?.document.uri.fsPath
+  }
 } 
