@@ -46,7 +46,11 @@ jobs:
         id: version-check
         run: |
           PKG_VERSION=$(node -p "require('./package.json').version")
-          if npm view . versions | grep -q "\"$PKG_VERSION\""; then
+          echo "Running: npm view . versions"
+          VERSIONS_OUTPUT=$(npm view . versions)
+          echo "Command output: $VERSIONS_OUTPUT"
+          
+          if echo "$VERSIONS_OUTPUT" | grep -q "'$PKG_VERSION'"; then
             echo "Version $PKG_VERSION already exists in npm registry"
             echo "exists=true" >> $GITHUB_OUTPUT
           else
