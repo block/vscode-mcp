@@ -334,7 +334,7 @@ export class CommandHandler {
       // Get included files list
       const includedFiles = this.contextTracker.getIncludedFiles()
 
-      if (includedFiles.length === 0) {
+      if (includedFiles.length === 0 && (!command.selections || command.selections.length === 0)) {
         return {
           success: true,
           tabs: [],
@@ -357,14 +357,50 @@ export class CommandHandler {
       const workspaceFolders = vscode.workspace.workspaceFolders || []
       const workspacePaths = workspaceFolders.map(folder => folder.uri.fsPath)
 
-      // Filter included files to only those in the current workspace
-      const workspaceIncludedFiles = includedFiles.filter(filePath =>
+      // Create a combined set of files to process - both from context tracker and selections
+      const filesToProcess = new Set<string>(includedFiles)
+      
+      // Add files from selections parameter
+      if (command.selections && command.selections.length > 0) {
+        command.selections.forEach(selection => {
+          filesToProcess.add(selection.filePath)
+        })
+      }
+
+      // Filter files to only those in the current workspace
+      const workspaceFiles = Array.from(filesToProcess).filter(filePath =>
         workspacePaths.some(wsPath => filePath === wsPath || filePath.startsWith(wsPath + require('path').sep))
       )
 
-      // Process included files, loading them if needed
+      // Create a map of file paths to their line range selections
+      const fileSelections = new Map<string, Array<{startLine: number; endLine: number}>>()
+      
+      // Add selections from command parameter
+      if (command.selections) {
+        command.selections.forEach(selection => {
+          if (selection.ranges && selection.ranges.length > 0) {
+            fileSelections.set(selection.filePath, selection.ranges)
+          }
+        })
+      }
+      
+      // Add stored line ranges from contextTracker
+      for (const filePath of workspaceFiles) {
+        // Skip if already set from command parameter
+        if (fileSelections.has(filePath)) {
+          continue
+        }
+        
+        // Get stored line ranges if any
+        const storedRanges = this.contextTracker.getLineRanges(filePath)
+        if (storedRanges && storedRanges.length > 0) {
+          fileSelections.set(filePath, storedRanges)
+        }
+      }
+
+      // Process files, loading them if needed
       const tabs = await Promise.all(
-        workspaceIncludedFiles.map(async filePath => {
+        workspaceFiles.map(async filePath => {
           let document: vscode.TextDocument
           let isOpen = openDocuments.has(filePath)
 
@@ -388,6 +424,8 @@ export class CommandHandler {
             isOpen: boolean
             languageId?: string
             content?: string
+            selectedContent?: string
+            lineRanges?: Array<{startLine: number; endLine: number}>
             workspaceFolder?: string
           } = {
             filePath,
@@ -396,8 +434,29 @@ export class CommandHandler {
             languageId: document.languageId,
           }
 
-          // Include content if requested
-          if (command.includeContent) {
+          // Add line range information if available
+          const lineRanges = fileSelections.get(filePath)
+          if (lineRanges) {
+            tabInfo.lineRanges = lineRanges
+            
+            // If content is requested, extract the selected lines
+            if (command.includeContent) {
+              const textLines = document.getText().split('\n')
+              
+              // Extract the text from the selected line ranges
+              const selectedTextParts = lineRanges.map(range => {
+                // Adjust for 0-based array indexing vs 1-based line numbers
+                const start = Math.max(0, range.startLine - 1)
+                const end = Math.min(textLines.length - 1, range.endLine - 1)
+                
+                return textLines.slice(start, end + 1).join('\n')
+              })
+              
+              tabInfo.selectedContent = selectedTextParts.join('\n\n// ----- Next Range ----- //\n\n')
+            }
+          } 
+          // Include full content if requested and no line ranges specified
+          else if (command.includeContent) {
             tabInfo.content = document.getText()
           }
 
@@ -418,6 +477,8 @@ export class CommandHandler {
         isOpen: boolean
         languageId?: string
         content?: string
+        selectedContent?: string
+        lineRanges?: Array<{startLine: number; endLine: number}>
         workspaceFolder?: string
       }>
 
