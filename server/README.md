@@ -1,4 +1,4 @@
-# Code MCP Server
+# VS Code MCP Server
 
 A Model Context Protocol (MCP) server for VS Code integration, enabling AI agents like Goose or Claude to interact with VS Code.
 
