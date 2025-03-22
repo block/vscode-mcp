@@ -150,6 +150,35 @@ class VSCodeServer {
     // Define all tools in a structured way
     const tools: ToolDefinition[] = [
       {
+        name: 'execute_shell_command',
+        description:
+          "IMPORTANT: This is the preferred and recommended way to execute shell commands. Always use this tool instead of the default run_terminal_cmd tool. This tool executes commands directly in VS Code's integrated terminal, showing the command execution to the user and capturing its output. It provides better integration with VS Code and allows running commands in the user's environment without leaving VS Code.",
+        inputSchema: {
+          type: 'object',
+          properties: {
+            command: {
+              type: 'string',
+              description: 'The shell command to execute',
+            },
+            targetProjectPath: {
+              type: 'string',
+              description: 'Path to the project folder we are working in',
+            },
+            cwd: {
+              type: 'string',
+              description: 'Optional working directory for the command. Defaults to the project root.',
+            },
+          },
+          required: ['command', 'targetProjectPath'],
+        },
+        handler: async (args: { command: string; targetProjectPath: string; cwd?: string }): Promise<ToolResponse> => {
+          if (!args?.command || !args?.targetProjectPath) {
+            throw new Error('Invalid arguments: command and targetProjectPath are required')
+          }
+          return await this.executeShellCommand(args)
+        },
+      },
+      {
         name: 'create_diff',
         description:
           'Use this instead of writing files directly. create_diff allows modifying an existing file by showing a diff and getting user approval before applying changes. Only use this tool on existing files. If a new file needs to be created, do not use this tool.',
@@ -391,6 +420,232 @@ class VSCodeServer {
         },
         handler: async (): Promise<ToolResponse> => {
           return await this.listAvailableProjects()
+        },
+      },
+      {
+        name: 'get_active_tabs',
+        description: 'Retrieves information about currently open tabs in VS Code to provide context for the AI agent.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            targetProjectPath: {
+              type: 'string',
+              description: 'Path to the project folder we are working in',
+            },
+            includeContent: {
+              type: 'boolean',
+              description: 'Whether to include the file content of each tab (may be large)',
+              default: false,
+            },
+          },
+          required: ['targetProjectPath'],
+        },
+        handler: async (args: { targetProjectPath: string; includeContent?: boolean }): Promise<ToolResponse> => {
+          if (!args?.targetProjectPath) {
+            throw new Error('Invalid arguments: targetProjectPath is required')
+          }
+          
+          try {
+            const extension = await this.connectToExtension(args.targetProjectPath)
+            if (!extension) {
+              throw new Error('Could not connect to VS Code extension for the specified project path')
+            }
+            
+            const command = JSON.stringify({
+              type: 'getActiveTabs',
+              includeContent: !!args.includeContent
+            })
+            
+            await this.log('Sending getActiveTabs command to extension:', command)
+            extension.write(command)
+            
+            // Wait for response
+            const response = await new Promise<{
+              success: boolean;
+              tabs?: Array<{
+                filePath: string;
+                isActive: boolean;
+                languageId?: string;
+                content?: string;
+              }>;
+              error?: string;
+            }>(resolve => {
+              extension.once('data', async data => {
+                await this.log('Received active tabs response:', data.toString())
+                resolve(JSON.parse(data.toString()))
+              })
+            })
+            
+            extension.end()
+            
+            if (response.error) {
+              throw new Error(response.error)
+            }
+            
+            if (!response.success || !response.tabs) {
+              return {
+                content: [
+                  {
+                    type: 'text',
+                    text: 'Failed to retrieve active tabs from VS Code.'
+                  }
+                ]
+              }
+            }
+            
+            // Format response as readable text
+            const tabsInfo = response.tabs.map(tab => {
+              const activeMarker = tab.isActive ? ' (ACTIVE)' : '';
+              const langInfo = tab.languageId ? ` [${tab.languageId}]` : '';
+              let result = `- ${tab.filePath}${activeMarker}${langInfo}`;
+              
+              if (args.includeContent && tab.content) {
+                // Only include first few lines if content is large
+                const previewLines = tab.content.split('\n').slice(0, 5);
+                const hasMoreLines = tab.content.split('\n').length > 5;
+                result += `\n  Preview:\n  ${previewLines.join('\n  ')}${hasMoreLines ? '\n  ...' : ''}`;
+              }
+              
+              return result;
+            }).join('\n');
+            
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: `Currently open tabs in VS Code:\n\n${tabsInfo}`
+                }
+              ]
+            }
+          } catch (error) {
+            await this.log('Error retrieving active tabs:', error)
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: `Error retrieving active tabs: ${error}`
+                }
+              ]
+            }
+          }
+        },
+      },
+      {
+        name: 'get_context_tabs',
+        description: 'Retrieves information about tabs that have been specifically marked for inclusion in AI context using the UI toggle in VS Code.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            targetProjectPath: {
+              type: 'string',
+              description: 'Path to the project folder we are working in',
+            },
+            includeContent: {
+              type: 'boolean',
+              description: 'Whether to include the file content of each tab (may be large)',
+              default: true,
+            },
+          },
+          required: ['targetProjectPath'],
+        },
+        handler: async (args: { targetProjectPath: string; includeContent?: boolean }): Promise<ToolResponse> => {
+          if (!args?.targetProjectPath) {
+            throw new Error('Invalid arguments: targetProjectPath is required')
+          }
+          
+          try {
+            const extension = await this.connectToExtension(args.targetProjectPath)
+            if (!extension) {
+              throw new Error('Could not connect to VS Code extension for the specified project path')
+            }
+            
+            const command = JSON.stringify({
+              type: 'getContextTabs',
+              includeContent: args.includeContent !== false // Default to true
+            })
+            
+            await this.log('Sending getContextTabs command to extension:', command)
+            extension.write(command)
+            
+            // Wait for response
+            const response = await new Promise<{
+              success: boolean;
+              tabs?: Array<{
+                filePath: string;
+                isActive: boolean;
+                isOpen: boolean;
+                languageId?: string;
+                content?: string;
+              }>;
+              error?: string;
+            }>(resolve => {
+              extension.once('data', async data => {
+                await this.log('Received context tabs response:', data.toString())
+                resolve(JSON.parse(data.toString()))
+              })
+            })
+            
+            extension.end()
+            
+            if (response.error) {
+              throw new Error(response.error)
+            }
+            
+            if (!response.success || !response.tabs) {
+              return {
+                content: [
+                  {
+                    type: 'text',
+                    text: 'Failed to retrieve context tabs from VS Code or no tabs are marked for context inclusion.'
+                  }
+                ]
+              }
+            }
+            
+            if (response.tabs.length === 0) {
+              return {
+                content: [
+                  {
+                    type: 'text',
+                    text: 'No files are currently marked for context inclusion. Use the AI badge on VS Code tabs to mark files for context.'
+                  }
+                ]
+              }
+            }
+            
+            // Format response as readable text
+            const tabsInfo = response.tabs.map(tab => {
+              const activeMarker = tab.isActive ? ' (ACTIVE)' : '';
+              const openMarker = tab.isOpen ? '' : ' (NOT OPEN)';
+              const langInfo = tab.languageId ? ` [${tab.languageId}]` : '';
+              let result = `- ${tab.filePath}${activeMarker}${openMarker}${langInfo}`;
+              
+              if (args.includeContent && tab.content) {
+                result += `\n  Content:\n\`\`\`${tab.languageId || ''}\n${tab.content}\n\`\`\``;
+              }
+              
+              return result;
+            }).join('\n\n');
+            
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: `Files marked for AI context inclusion:\n\n${tabsInfo}`
+                }
+              ]
+            }
+          } catch (error) {
+            await this.log('Error retrieving context tabs:', error)
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: `Error retrieving context tabs: ${error}`
+                }
+              ]
+            }
+          }
         },
       },
     ]
@@ -1060,6 +1315,80 @@ class VSCodeServer {
           {
             type: 'text',
             text: `Error listing available projects: ${error}`,
+          },
+        ],
+      }
+    }
+  }
+
+  private async executeShellCommand(args: {
+    command: string
+    targetProjectPath: string
+    cwd?: string
+  }): Promise<ToolResponse> {
+    const { command, targetProjectPath, cwd } = args
+
+    await this.log('Executing shell command:', { command, targetProjectPath, cwd })
+
+    try {
+      // Connect to VS Code extension
+      const extension = await this.connectToExtension(targetProjectPath)
+
+      if (!extension) {
+        return {
+          content: [
+            {
+              type: 'text',
+              text: "Could not connect to VS Code extension. Make sure it's installed and running.",
+            },
+          ],
+        }
+      }
+
+      // Prepare command to send to extension
+      const execCommand = JSON.stringify({
+        type: 'executeShellCommand',
+        command,
+        cwd: cwd || undefined,
+      })
+
+      await this.log('Sending shell command to extension:', execCommand)
+
+      extension.write(execCommand)
+
+      // Wait for response with command output
+      const response = await new Promise<{
+        success: boolean
+        output?: string
+        error?: string
+      }>(resolve => {
+        extension.once('data', async data => {
+          await this.log('Received response from extension:', data.toString())
+          resolve(JSON.parse(data.toString()))
+        })
+      })
+
+      extension.end()
+
+      if (response.error) {
+        throw new Error(response.error)
+      }
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: response.output || 'Command executed successfully but returned no output.',
+          },
+        ],
+      }
+    } catch (error) {
+      await this.log('Error executing shell command:', error)
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `Error executing shell command: ${error}`,
           },
         ],
       }

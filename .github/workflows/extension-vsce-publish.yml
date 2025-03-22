@@ -42,15 +42,46 @@ jobs:
         id: version_check
         run: |
           VERSION=$(node -p "require('./package.json').version")
-          if vsce show block.vscode-mcp-extension | grep -q "\"version\": \"$VERSION\""; then
-            echo "Version $VERSION already exists in marketplace"
-            exit 1
+          echo "Current package.json version: $VERSION"
+
+          echo "============ BEGIN VSCE SHOW OUTPUT ============"
+          # Capture the full output to both display and use for version checking
+          VSCE_OUTPUT=$(vsce show block.vscode-mcp-extension || echo "Command failed")
+          echo "$VSCE_OUTPUT"
+          echo "============= END VSCE SHOW OUTPUT ============="
+
+          VERSION_EXISTS=false
+
+          # Check for version in different output formats
+          # Plain text "Version: X.X.X" format
+          if echo "$VSCE_OUTPUT" | grep -q "Version:[[:space:]]*$VERSION"; then
+            echo "NOTICE: Version $VERSION already exists in marketplace (found in Version field)"
+            VERSION_EXISTS=true
+          fi
+
+          # Version table format
+          if echo "$VSCE_OUTPUT" | grep -q "^[[:space:]]*$VERSION[[:space:]]"; then
+            echo "NOTICE: Version $VERSION already exists in marketplace (found in version table)"
+            VERSION_EXISTS=true
+          fi
+
+          # Check for any occurrence of the version
+          if echo "$VSCE_OUTPUT" | grep -w "$VERSION" | grep -v "Current package.json version"; then
+            echo "NOTICE: Version $VERSION may exist in the marketplace"
+            echo "Please verify the output above carefully"
+            VERSION_EXISTS=true
+          fi
+
+          if [ "$VERSION_EXISTS" = "true" ]; then
+            echo "Skipping publish step as version already exists"
+            echo "version_exists=true" >> $GITHUB_OUTPUT
           else
             echo "Version $VERSION is new and can be published"
+            echo "version_exists=false" >> $GITHUB_OUTPUT
           fi
 
       - name: Publish to Visual Studio Marketplace
-        if: success()
+        if: steps.version_check.outputs.version_exists != 'true'
         run: npm run publish-extension
         env:
           VSCE_PAT: ${{ secrets.VSCE_PAT }}

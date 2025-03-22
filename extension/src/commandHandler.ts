@@ -1,7 +1,8 @@
 import * as vscode from 'vscode'
 import * as net from 'net'
+import * as cp from 'child_process'
+import { promisify } from 'util'
 import {
-  Command,
   CommandType,
   CommandUnion,
   ShowDiffCommand,
@@ -13,8 +14,16 @@ import {
   BaseResponse,
   DiffResponse,
   WorkspaceResponse,
+  ActiveTabsResponse,
+  GetContextTabsCommand,
+  ExecuteShellCommand,
 } from './types'
 import { DiffManager } from './diffManager'
+import { SettingsManager } from './settingsManager'
+import { ContextTracker } from './contextTracker'
+import { EditorUtils } from './editorUtils'
+
+const exec = promisify(cp.exec)
 
 // Define a type for command handlers with proper mapping between command types and handler parameter types
 type CommandHandlerMap = {
@@ -24,6 +33,9 @@ type CommandHandlerMap = {
   getCurrentWorkspace: (command: GetCurrentWorkspaceCommand) => Promise<WorkspaceResponse>
   ping: (command: PingCommand) => BaseResponse
   focusWindow: (command: FocusWindowCommand) => Promise<BaseResponse>
+  getActiveTabs: (command: { type: 'getActiveTabs'; includeContent?: boolean }) => Promise<ActiveTabsResponse>
+  getContextTabs: (command: GetContextTabsCommand) => Promise<ActiveTabsResponse>
+  executeShellCommand: (command: ExecuteShellCommand) => Promise<BaseResponse>
 }
 
 /**
@@ -32,8 +44,14 @@ type CommandHandlerMap = {
 export class CommandHandler {
   // Command handler registry
   private commandHandlers: Partial<CommandHandlerMap> = {}
+  private settingsManager: SettingsManager
 
-  constructor(private readonly diffManager: DiffManager) {
+  private contextTracker: ContextTracker
+
+  constructor(private readonly diffManager: DiffManager, contextTracker: ContextTracker) {
+    this.settingsManager = SettingsManager.getInstance()
+    this.diffManager = diffManager
+    this.contextTracker = contextTracker
     this.registerCommandHandlers()
   }
 
@@ -48,6 +66,9 @@ export class CommandHandler {
     this.registerHandler('getCurrentWorkspace', this.handleGetCurrentWorkspace.bind(this))
     this.registerHandler('ping', this.handlePing.bind(this))
     this.registerHandler('focusWindow', this.handleFocusWindow.bind(this))
+    this.registerHandler('getActiveTabs', this.handleGetActiveTabs.bind(this))
+    this.registerHandler('getContextTabs', this.handleGetContextTabs.bind(this))
+    this.registerHandler('executeShellCommand', this.handleExecuteShellCommand.bind(this))
   }
 
   /**
@@ -68,21 +89,43 @@ export class CommandHandler {
 
       let response: BaseResponse
 
-      // Get the handler for this command type
-      const handler = this.commandHandlers[command.type] as Function
+      // Check settings before processing commands
+      const settings = this.settingsManager.getSettings()
 
-      if (handler) {
-        // Special case for showDiff which needs the socket
-        if (command.type === 'showDiff') {
-          response = await handler(command, socket)
-        } else {
-          response = await handler(command)
-        }
-      } else {
-        // This should never happen with proper typing
+      // Handle disabled features with auto-responses
+      if (command.type === 'showDiff' && !settings.diffing.enabled) {
+        console.log('MCP Companion: Diffing is disabled in settings - auto-applying changes')
+        vscode.window.showInformationMessage('Diffing is disabled in MCP settings - changes auto-applied')
+        response = this.diffManager.createDiffResponse(true)
+      } else if (command.type === 'open' && !settings.fileOpening.enabled) {
+        console.log('MCP Companion: File opening is disabled in settings')
         response = {
           success: false,
-          error: `Unknown command type: ${command.type}`,
+          error: 'File opening is disabled in MCP settings',
+        }
+      } else if (command.type === 'executeShellCommand' && !settings.shellCommands.enabled) {
+        console.log('MCP Companion: Shell command execution is disabled in settings')
+        response = {
+          success: false,
+          error: 'Shell command execution is disabled in MCP settings',
+        }
+      } else {
+        // Get the handler for this command type
+        const handler = this.commandHandlers[command.type] as Function
+
+        if (handler) {
+          // Special case for showDiff which needs the socket
+          if (command.type === 'showDiff') {
+            response = await handler(command, socket)
+          } else {
+            response = await handler(command)
+          }
+        } else {
+          // This should never happen with proper typing
+          response = {
+            success: false,
+            error: `Unknown command type: ${command.type}`,
+          }
         }
       }
 
@@ -212,6 +255,217 @@ export class CommandHandler {
       return { success: true }
     } catch (error) {
       console.error('MCP Companion: Error focusing window:', error)
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : String(error),
+      }
+    }
+  }
+
+  /**
+   * Gets information about all active editor tabs
+   * @param command The getActiveTabs command
+   * @returns Response with tabs information
+   */
+  private async handleGetActiveTabs(command: {
+    type: 'getActiveTabs'
+    includeContent?: boolean
+  }): Promise<ActiveTabsResponse> {
+    try {
+      // Get editors from the current workspace only
+      const editors = EditorUtils.getWorkspaceEditors()
+      const activeEditor = EditorUtils.getWorkspaceActiveEditor()
+
+      // Process each editor to gather information
+      const tabs = await Promise.all(
+        Array.from(editors).map(async editor => {
+          const document = editor.document
+          const isActive = editor === activeEditor
+          const filePath = document.uri.fsPath
+
+          // Create tab info object
+          const tabInfo: {
+            filePath: string
+            isActive: boolean
+            languageId?: string
+            content?: string
+            workspaceFolder?: string
+          } = {
+            filePath,
+            isActive,
+            languageId: document.languageId,
+          }
+
+          // Include content if requested
+          if (command.includeContent) {
+            tabInfo.content = document.getText()
+          }
+
+          // Add workspace folder info
+          const workspaceFolder = vscode.workspace.getWorkspaceFolder(document.uri)
+          if (workspaceFolder) {
+            tabInfo.workspaceFolder = workspaceFolder.uri.fsPath
+          }
+
+          return tabInfo
+        })
+      )
+
+      return {
+        success: true,
+        tabs,
+      }
+    } catch (error) {
+      console.error('Error getting active tabs:', error)
+      return {
+        success: false,
+        error: `Error getting active tabs: ${error}`,
+      }
+    }
+  }
+
+  /**
+   * Gets information about tabs specifically marked for AI context
+   * @param command The getContextTabs command
+   * @returns Response with context tabs information
+   */
+  private async handleGetContextTabs(command: GetContextTabsCommand): Promise<ActiveTabsResponse> {
+    try {
+      // Get included files list
+      const includedFiles = this.contextTracker.getIncludedFiles()
+
+      if (includedFiles.length === 0) {
+        return {
+          success: true,
+          tabs: [],
+        }
+      }
+
+      // Get workspace editors only
+      const editors = EditorUtils.getWorkspaceEditors()
+      const activeEditor = EditorUtils.getWorkspaceActiveEditor()
+
+      // Map of file paths to document instances
+      const openDocuments = new Map<string, vscode.TextDocument>()
+
+      // First collect all open documents
+      Array.from(editors).forEach(editor => {
+        openDocuments.set(editor.document.uri.fsPath, editor.document)
+      })
+
+      // Only process files that are in the current workspace
+      const workspaceFolders = vscode.workspace.workspaceFolders || []
+      const workspacePaths = workspaceFolders.map(folder => folder.uri.fsPath)
+
+      // Filter included files to only those in the current workspace
+      const workspaceIncludedFiles = includedFiles.filter(filePath =>
+        workspacePaths.some(wsPath => filePath === wsPath || filePath.startsWith(wsPath + require('path').sep))
+      )
+
+      // Process included files, loading them if needed
+      const tabs = await Promise.all(
+        workspaceIncludedFiles.map(async filePath => {
+          let document: vscode.TextDocument
+          let isOpen = openDocuments.has(filePath)
+
+          // If the file is already open, use that instance
+          if (isOpen) {
+            document = openDocuments.get(filePath)!
+          } else {
+            // Otherwise, load it temporarily
+            try {
+              document = await vscode.workspace.openTextDocument(filePath)
+            } catch (error) {
+              console.error(`Could not load file: ${filePath}`, error)
+              return null
+            }
+          }
+
+          // Create tab info object
+          const tabInfo: {
+            filePath: string
+            isActive: boolean
+            isOpen: boolean
+            languageId?: string
+            content?: string
+            workspaceFolder?: string
+          } = {
+            filePath,
+            isActive: activeEditor?.document.uri.fsPath === filePath,
+            isOpen,
+            languageId: document.languageId,
+          }
+
+          // Include content if requested
+          if (command.includeContent) {
+            tabInfo.content = document.getText()
+          }
+
+          // Add workspace folder info
+          const workspaceFolder = vscode.workspace.getWorkspaceFolder(document.uri)
+          if (workspaceFolder) {
+            tabInfo.workspaceFolder = workspaceFolder.uri.fsPath
+          }
+
+          return tabInfo
+        })
+      )
+
+      // Filter out null entries (files that couldn't be loaded)
+      const validTabs = tabs.filter(tab => tab !== null) as Array<{
+        filePath: string
+        isActive: boolean
+        isOpen: boolean
+        languageId?: string
+        content?: string
+        workspaceFolder?: string
+      }>
+
+      return {
+        success: true,
+        tabs: validTabs,
+      }
+    } catch (error) {
+      console.error('Error getting context tabs:', error)
+      return {
+        success: false,
+        error: `Error getting context tabs: ${error}`,
+      }
+    }
+  }
+
+  /**
+   * Handle the executeShellCommand command
+   */
+  private async handleExecuteShellCommand(command: ExecuteShellCommand): Promise<BaseResponse> {
+    const { command: shellCommand, cwd } = command
+    console.log('MCP Companion: Executing shell command:', shellCommand, { cwd })
+
+    try {
+      // Execute the command using child_process
+      const { stdout, stderr } = await exec(shellCommand, { cwd })
+
+      // Create or get the terminal to show the command execution
+      let terminal = vscode.window.activeTerminal
+      if (!terminal) {
+        terminal = vscode.window.createTerminal('MCP Shell')
+      }
+
+      // Show the command execution in the terminal
+      if (cwd) {
+        terminal.sendText(`cd "${cwd}"`)
+      }
+      terminal.sendText(shellCommand)
+      terminal.show()
+
+      // Return the combined output
+      const output = stdout + (stderr ? `\nError: ${stderr}` : '')
+      return {
+        success: true,
+        output: output || 'Command executed but no output captured',
+      }
+    } catch (error) {
+      console.error('MCP Companion: Error executing shell command:', error)
       return {
         success: false,
         error: error instanceof Error ? error.message : String(error),
