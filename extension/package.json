@@ -20,6 +20,7 @@
     "onStartupFinished"
   ],
   "main": "dist/extension.js",
+  "icon": "media/logo.jpg",
   "contributes": {
     "commands": [
       {
