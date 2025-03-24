@@ -545,10 +545,42 @@ class VSCodeServer {
               description: 'Whether to include the file content of each tab (may be large)',
               default: true,
             },
+            selections: {
+              type: 'array',
+              description: 'Optional array of file paths with specific line ranges to include',
+              items: {
+                type: 'object',
+                properties: {
+                  filePath: {
+                    type: 'string',
+                    description: 'Path to the file',
+                  },
+                  ranges: {
+                    type: 'array',
+                    description: 'Array of line ranges to include from the file',
+                    items: {
+                      type: 'object',
+                      properties: {
+                        startLine: {
+                          type: 'integer',
+                          description: 'Starting line number (1-based)',
+                        },
+                        endLine: {
+                          type: 'integer',
+                          description: 'Ending line number (1-based, inclusive)',
+                        },
+                      },
+                      required: ['startLine', 'endLine'],
+                    },
+                  },
+                },
+                required: ['filePath'],
+              },
+            },
           },
           required: ['targetProjectPath'],
         },
-        handler: async (args: { targetProjectPath: string; includeContent?: boolean }): Promise<ToolResponse> => {
+        handler: async (args: { targetProjectPath: string; includeContent?: boolean; selections?: Array<{filePath: string; ranges?: Array<{startLine: number; endLine: number}>}>; }): Promise<ToolResponse> => {
           if (!args?.targetProjectPath) {
             throw new Error('Invalid arguments: targetProjectPath is required')
           }
@@ -561,7 +593,8 @@ class VSCodeServer {
             
             const command = JSON.stringify({
               type: 'getContextTabs',
-              includeContent: args.includeContent !== false // Default to true
+              includeContent: args.includeContent !== false, // Default to true
+              selections: args.selections || [],
             })
             
             await this.log('Sending getContextTabs command to extension:', command)
@@ -576,6 +609,8 @@ class VSCodeServer {
                 isOpen: boolean;
                 languageId?: string;
                 content?: string;
+                selectedContent?: string;
+                lineRanges?: Array<{startLine: number; endLine: number}>;
               }>;
               error?: string;
             }>(resolve => {
@@ -620,8 +655,19 @@ class VSCodeServer {
               const langInfo = tab.languageId ? ` [${tab.languageId}]` : '';
               let result = `- ${tab.filePath}${activeMarker}${openMarker}${langInfo}`;
               
-              if (args.includeContent && tab.content) {
-                result += `\n  Content:\n\`\`\`${tab.languageId || ''}\n${tab.content}\n\`\`\``;
+              // If we have line ranges, include that info
+              if (tab.lineRanges && tab.lineRanges.length > 0) {
+                const rangesText = tab.lineRanges.map(range => 
+                  `lines ${range.startLine}-${range.endLine}`).join(', ');
+                result += `\n  Selected ${rangesText}`;
+              }
+              
+              if (args.includeContent) {
+                if (tab.selectedContent) {
+                  result += `\n  Selected Content:\n\`\`\`${tab.languageId || ''}\n${tab.selectedContent}\n\`\`\``;
+                } else if (tab.content) {
+                  result += `\n  Content:\n\`\`\`${tab.languageId || ''}\n${tab.content}\n\`\`\``;
+                }
               }
               
               return result;

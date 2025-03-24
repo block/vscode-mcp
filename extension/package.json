@@ -21,11 +21,10 @@
   ],
   "main": "dist/extension.js",
   "contributes": {
-
     "commands": [
       {
         "command": "mcp-companion.toggleFileContext",
-        "title": "Toggle AI Context Inclusion",
+        "title": "Toggle File in AI Context",
         "category": "MCP",
         "icon": "$(megaphone)"
       },
@@ -37,7 +36,7 @@
       },
       {
         "command": "mcp-companion.clearAllContext",
-        "title": "Clear All AI Context Files",
+        "title": "Clear All Files from AI Context",
         "category": "MCP",
         "icon": "$(clear-all)"
       },
@@ -46,6 +45,21 @@
         "title": "Remove from AI Context",
         "category": "MCP",
         "icon": "$(close)"
+      },
+      {
+        "command": "mcp-companion.includeSelectedLines",
+        "title": "Include Selected Lines in AI Context",
+        "category": "MCP"
+      },
+      {
+        "command": "mcp-companion.clearLineSelections",
+        "title": "Clear Line Selections from AI Context",
+        "category": "MCP"
+      },
+      {
+        "command": "mcp-companion.removeLineRange",
+        "title": "Remove Line Range from Context",
+        "category": "MCP"
       }
     ],
     "menus": {
@@ -68,6 +82,28 @@
           "command": "mcp-companion.removeFromContext",
           "when": "viewItem == contextFile",
           "group": "inline"
+        },
+        {
+          "command": "mcp-companion.removeLineRange",
+          "when": "viewItem == lineRange",
+          "group": "inline"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "mcp-companion.toggleFileContext",
+          "group": "MCPGroup@1",
+          "when": "editorTextFocus"
+        },
+        {
+          "command": "mcp-companion.includeSelectedLines",
+          "group": "MCPGroup@2",
+          "when": "editorHasSelection"
+        },
+        {
+          "command": "mcp-companion.clearLineSelections",
+          "group": "MCPGroup@3",
+          "when": "editorTextFocus"
         }
       ]
     },
@@ -94,6 +130,36 @@
           "type": "webview"
         }
       ]
+    },
+    "keybindings": [
+      {
+        "command": "mcp-companion.toggleFileContext",
+        "key": "ctrl+alt+c",
+        "mac": "cmd+alt+c",
+        "when": "editorTextFocus"
+      },
+      {
+        "command": "mcp-companion.includeSelectedLines",
+        "key": "ctrl+alt+l",
+        "mac": "cmd+alt+l",
+        "when": "editorHasSelection"
+      },
+      {
+        "command": "mcp-companion.clearLineSelections",
+        "key": "ctrl+alt+r",
+        "mac": "cmd+alt+r", 
+        "when": "editorTextFocus"
+      }
+    ],
+    "configuration": {
+      "title": "MCP Companion",
+      "properties": {
+        "mcp-companion.enableInlineButtons": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show inline 'Add to Goose' buttons when selecting text"
+        }
+      }
     }
   },
   "scripts": {

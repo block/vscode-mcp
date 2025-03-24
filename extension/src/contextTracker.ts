@@ -1,45 +1,177 @@
 import * as vscode from 'vscode'
 import * as path from 'path'
 import { EditorUtils } from './editorUtils'
+import * as fs from 'fs'
+import { LineRange } from './types'
+
+/**
+ * Tree item for file and line range entries in the context explorer
+ */
+class FileTreeItem extends vscode.TreeItem {
+  constructor(
+    public readonly uri: vscode.Uri,
+    public readonly collapsibleState: vscode.TreeItemCollapsibleState,
+    public readonly type: 'file' | 'lineRange' = 'file',
+    public readonly lineRange?: { startLine: number; endLine: number }
+  ) {
+    super(
+      type === 'file' 
+        ? path.basename(uri.fsPath) 
+        : `Lines ${lineRange!.startLine}-${lineRange!.endLine}`,
+      collapsibleState
+    );
+    
+    if (type === 'file') {
+      this.contextValue = 'contextFile';
+      this.tooltip = uri.fsPath;
+      this.description = path.dirname(uri.fsPath);
+      this.iconPath = new vscode.ThemeIcon('file');
+      
+      // Open the file when clicked
+      this.command = {
+        command: 'vscode.open',
+        title: 'Open File',
+        arguments: [uri]
+      };
+    } else if (type === 'lineRange') {
+      this.contextValue = 'lineRange';
+      this.tooltip = `Lines ${lineRange!.startLine}-${lineRange!.endLine}`;
+      this.description = '';
+      this.iconPath = new vscode.ThemeIcon('list-selection');
+      
+      // Add command to reveal this range when clicked
+      this.command = {
+        command: 'mcp-companion.revealLineRange',
+        title: 'Reveal Line Range',
+        arguments: [uri, lineRange!.startLine - 1, lineRange!.endLine - 1] // Convert to 0-based for internal use
+      };
+    }
+  }
+}
 
 /**
  * Tree data provider for showing context-included files
  */
-class ContextFilesProvider implements vscode.TreeDataProvider<vscode.Uri> {
-  private _onDidChangeTreeData = new vscode.EventEmitter<vscode.Uri | undefined | null | void>();
+class ContextFilesProvider implements vscode.TreeDataProvider<FileTreeItem | vscode.Uri> {
+  private _onDidChangeTreeData = new vscode.EventEmitter<FileTreeItem | vscode.Uri | undefined | null>();
   readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
   
   constructor(private contextTracker: ContextTracker) {}
   
   refresh(): void {
-    this._onDidChangeTreeData.fire();
+    this._onDidChangeTreeData.fire(null);
   }
   
-  getTreeItem(element: vscode.Uri): vscode.TreeItem {
-    const treeItem = new vscode.TreeItem(
-      path.basename(element.fsPath),
-      vscode.TreeItemCollapsibleState.None
-    );
-    treeItem.description = path.dirname(element.fsPath);
-    treeItem.tooltip = element.fsPath;
-    treeItem.command = {
-      command: 'vscode.open',
-      arguments: [element],
-      title: 'Open File'
-    };
-    treeItem.contextValue = 'contextFile';
-    treeItem.iconPath = new vscode.ThemeIcon('symbol-file');
+  getTreeItem(element: FileTreeItem | vscode.Uri): vscode.TreeItem {
+    if (element instanceof FileTreeItem) {
+      return element;
+    }
     
-    return treeItem;
+    // For URI elements, create a file tree item
+    const uri = element;
+    const hasLineRanges = this.contextTracker.getLineRanges(uri.fsPath);
+    
+    return new FileTreeItem(
+      uri,
+      hasLineRanges && hasLineRanges.length > 0 
+        ? vscode.TreeItemCollapsibleState.Collapsed 
+        : vscode.TreeItemCollapsibleState.None
+    );
   }
   
-  getChildren(element?: vscode.Uri): vscode.Uri[] {
-    if (element) {
+  getChildren(element?: FileTreeItem | vscode.Uri): Thenable<(FileTreeItem | vscode.Uri)[]> {
+    if (!element) {
+      // Root level - return all included files as URIs
+      const fileUris = this.contextTracker.getIncludedFiles().map(file => vscode.Uri.file(file));
+      return Promise.resolve(fileUris);
+    }
+    
+    // If we have a FileTreeItem type element that's not a file
+    if (element instanceof FileTreeItem && element.type !== 'file') {
+      return Promise.resolve([]);
+    }
+    
+    // If we have a file URI or a file type FileTreeItem, return line ranges if any
+    const filePath = element instanceof FileTreeItem ? element.uri.fsPath : element.fsPath;
+    const lineRanges = this.contextTracker.getLineRanges(filePath);
+    
+    if (lineRanges && lineRanges.length > 0) {
+      const uri = element instanceof FileTreeItem ? element.uri : element;
+      return Promise.resolve(
+        lineRanges.map(range => 
+          new FileTreeItem(
+            uri,
+            vscode.TreeItemCollapsibleState.None,
+            'lineRange',
+            range
+          )
+        )
+      );
+    }
+    
+    return Promise.resolve([]);
+  }
+}
+
+/**
+ * CodeLens provider for showing "Add to Goose" button on text selections
+ */
+class ContextCodeLensProvider implements vscode.CodeLensProvider {
+  private _onDidChangeCodeLenses: vscode.EventEmitter<void> = new vscode.EventEmitter<void>();
+  public readonly onDidChangeCodeLenses: vscode.Event<void> = this._onDidChangeCodeLenses.event;
+
+  constructor() {
+    // Refresh CodeLenses when the editor selection changes
+    vscode.window.onDidChangeTextEditorSelection(() => {
+      this._onDidChangeCodeLenses.fire();
+    });
+    
+    // Also refresh when configuration changes
+    vscode.workspace.onDidChangeConfiguration(event => {
+      if (event.affectsConfiguration('mcp-companion.enableInlineButtons')) {
+        this._onDidChangeCodeLenses.fire();
+      }
+    });
+  }
+
+  public provideCodeLenses(document: vscode.TextDocument): vscode.ProviderResult<vscode.CodeLens[]> {
+    // Check if the feature is enabled in settings
+    const config = vscode.workspace.getConfiguration('mcp-companion');
+    if (config.get<boolean>('enableInlineButtons') === false) {
       return [];
     }
     
-    // Convert included file paths to Uri objects
-    return this.contextTracker.getIncludedFiles().map(file => vscode.Uri.file(file));
+    const editor = vscode.window.activeTextEditor;
+    if (!editor || editor.document !== document || editor.selections.length === 0) {
+      return [];
+    }
+
+    // Only provide CodeLenses for non-empty selections
+    const codeLenses: vscode.CodeLens[] = [];
+    
+    for (const selection of editor.selections) {
+      if (selection.isEmpty) {
+        continue;
+      }
+      
+      // Create a range for the entire selection
+      const range = new vscode.Range(
+        selection.start.line, selection.start.character,
+        selection.end.line, selection.end.character
+      );
+      
+      // Add a CodeLens at the start of the selection
+      const lens = new vscode.CodeLens(range);
+      lens.command = {
+        title: '$(add) Add to Goose',
+        command: 'mcp-companion.includeSelectedLines',
+        tooltip: 'Add selected lines to AI context'
+      };
+      
+      codeLenses.push(lens);
+    }
+    
+    return codeLenses;
   }
 }
 
@@ -49,20 +181,23 @@ class ContextFilesProvider implements vscode.TreeDataProvider<vscode.Uri> {
 export class ContextTracker {
   private context: vscode.ExtensionContext
   private includedFiles: Set<string> = new Set()
+  private fileLineRanges: Map<string, LineRange[]> = new Map()
   private decorationType: vscode.TextEditorDecorationType
   private treeDataProvider: ContextFilesProvider
   private statusBarItem: vscode.StatusBarItem
   private _disposables: vscode.Disposable[] = []
+  private readonly storageFilePath: string
   
-  constructor(context: vscode.ExtensionContext) {
+  constructor(context: vscode.ExtensionContext, storagePath: string) {
     this.context = context
+    this.storageFilePath = path.join(storagePath, 'included-files.json')
     
     // Log startup for debugging
     console.log('ContextTracker initializing...');
     
     // Create decoration type for included files
     this.decorationType = vscode.window.createTextEditorDecorationType({
-      overviewRulerColor: new vscode.ThemeColor('terminal.ansiGreen'),
+      overviewRulerColor: new vscode.ThemeColor('terminal.ansiBlue'),
       overviewRulerLane: vscode.OverviewRulerLane.Right,
       isWholeLine: true
     })
@@ -101,6 +236,98 @@ export class ContextTracker {
         }
       }),
       
+      vscode.commands.registerCommand('mcp-companion.includeSelectedLines', () => {
+        console.log('Include selected lines command triggered');
+        const activeEditor = vscode.window.activeTextEditor;
+        if (!activeEditor || activeEditor.selections.length === 0) {
+          vscode.window.showWarningMessage('No active selection to include in AI context');
+          return;
+        }
+
+        const filePath = activeEditor.document.uri.fsPath;
+        
+        // Include the file first if it's not already included
+        if (!this.isFileIncluded(filePath)) {
+          this.toggleFileInclusion(filePath);
+        }
+        
+        // Get the line ranges from the selections
+        const newRanges = activeEditor.selections.map(selection => {
+          return {
+            startLine: selection.start.line + 1, // Convert to 1-based
+            endLine: selection.end.line + 1      // Convert to 1-based
+          };
+        });
+        
+        // Get existing ranges and append new ones
+        const existingRanges = this.getLineRanges(filePath) || [];
+        
+        // Merge existing and new ranges, avoiding duplicates
+        const combinedRanges = [...existingRanges];
+        
+        for (const newRange of newRanges) {
+          // Check if this range already exists
+          const isDuplicate = combinedRanges.some(
+            range => range.startLine === newRange.startLine && range.endLine === newRange.endLine
+          );
+          
+          if (!isDuplicate) {
+            combinedRanges.push(newRange);
+          }
+        }
+        
+        // Store the combined line ranges for this file
+        this.setLineRanges(filePath, combinedRanges);
+        
+        // Update UI to reflect the changes
+        this.updateStatusBarForFile(filePath);
+        this.updateAllEditorDecorations();
+        this.treeDataProvider.refresh();
+        
+        const totalNewLines = newRanges.reduce((sum, range) => sum + (range.endLine - range.startLine + 1), 0);
+        vscode.window.showInformationMessage(`Added ${totalNewLines} selected lines from ${path.basename(filePath)} to AI context`);
+      }),
+      
+      vscode.commands.registerCommand('mcp-companion.clearLineSelections', () => {
+        console.log('Clear line selections command triggered');
+        const activeEditor = vscode.window.activeTextEditor;
+        if (!activeEditor) {
+          vscode.window.showWarningMessage('No active file to clear line selections from');
+          return;
+        }
+
+        const filePath = activeEditor.document.uri.fsPath;
+        
+        // Clear any line range selections for this file
+        this.clearLineRanges(filePath);
+        vscode.window.showInformationMessage(`Cleared line selections for ${path.basename(filePath)}`);
+      }),
+      
+      vscode.commands.registerCommand('mcp-companion.revealLineRange', async (uri: vscode.Uri, startLine: number, endLine: number) => {
+        try {
+          console.log(`Revealing lines ${startLine}-${endLine} in ${uri.fsPath}`);
+          
+          // Open the document
+          const document = await vscode.workspace.openTextDocument(uri);
+          const editor = await vscode.window.showTextDocument(document);
+          
+          // Create a selection from start to end line
+          const start = new vscode.Position(startLine - 1, 0); // Convert to 0-based
+          const end = new vscode.Position(endLine - 1, document.lineAt(endLine - 1).text.length); // End of line
+          
+          // Select the range
+          editor.selection = new vscode.Selection(start, end);
+          
+          // Reveal the range in the editor
+          editor.revealRange(
+            new vscode.Range(start, end),
+            vscode.TextEditorRevealType.InCenter
+          );
+        } catch (error) {
+          console.error('Error revealing line range:', error);
+          vscode.window.showErrorMessage(`Failed to reveal line range: ${error}`);
+        }
+      }),
       
       vscode.commands.registerCommand('mcp-companion.debugContextInfo', () => {
         console.log('Debug context info command triggered');
@@ -134,13 +361,19 @@ export class ContextTracker {
       
       vscode.commands.registerCommand('mcp-companion.clearAllContext', () => {
         this.clearAllContext();
-      })
+      }),
+      
+      vscode.commands.registerCommand('mcp-companion.removeLineRange', this.removeLineRange.bind(this))
     )
     
+    // Register the CodeLens provider for "Add to Goose" button
+    const codeLensProvider = new ContextCodeLensProvider();
+    context.subscriptions.push(
+      vscode.languages.registerCodeLensProvider('*', codeLensProvider)
+    );
+    
     // Load previously included files from storage
-    const savedFiles = context.workspaceState.get<string[]>('contextIncludedFiles', []);
-    console.log(`Loaded ${savedFiles.length} files from storage`);
-    savedFiles.forEach(file => this.includedFiles.add(file));
+    this.loadIncludedFiles();
     
     // Set up editor decorations
     this.updateAllEditorDecorations();
@@ -159,7 +392,7 @@ export class ContextTracker {
         if (this.includedFiles.has(filePath)) {
           console.log(`File was deleted, removing from context: ${filePath}`);
           this.includedFiles.delete(filePath);
-          this.saveContextFiles();
+          this.saveIncludedFiles();
           this.treeDataProvider.refresh();
           this.updateStatusBar();
         }
@@ -229,7 +462,7 @@ export class ContextTracker {
     if (!this.includedFiles.has(filePath)) {
       console.log(`Adding file to context: ${filePath}`);
       this.includedFiles.add(filePath);
-      this.saveContextFiles();
+      this.saveIncludedFiles();
       this.updateUIAfterContextChange(filePath, true);
     }
   }
@@ -243,7 +476,11 @@ export class ContextTracker {
     if (this.includedFiles.has(filePath)) {
       console.log(`Removing file from context: ${filePath}`);
       this.includedFiles.delete(filePath);
-      this.saveContextFiles();
+      
+      // Also clear any line ranges associated with this file
+      this.fileLineRanges.delete(filePath);
+      
+      this.saveIncludedFiles();
       this.updateUIAfterContextChange(filePath, false);
     }
   }
@@ -278,15 +515,37 @@ export class ContextTracker {
   /**
    * Saves context files to persistent storage
    */
-  private saveContextFiles(): void {
-    this.context.workspaceState.update(
-      'contextIncludedFiles', 
-      Array.from(this.includedFiles)
-    );
+  private saveIncludedFiles(): void {
+    try {
+      // Ensure the directory exists
+      const dir = path.dirname(this.storageFilePath)
+      if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true })
+      }
+      
+      // Convert map to object for JSON serialization
+      const lineRangesObj: Record<string, LineRange[]> = {}
+      this.fileLineRanges.forEach((ranges, filePath) => {
+        lineRangesObj[filePath] = ranges
+      })
+      
+      // Save both the included files and line ranges
+      fs.writeFileSync(
+        this.storageFilePath, 
+        JSON.stringify({
+          files: Array.from(this.includedFiles),
+          lineRanges: lineRangesObj
+        }, null, 2)
+      )
+    } catch (error) {
+      console.error('Error saving included files:', error)
+    }
   }
   
   /**
    * Toggles whether a file is included in the AI context
+   * If a URI is provided, it uses that. Otherwise, uses the active editor.
+   * @param uri Optional URI to toggle, if not provided uses active editor
    */
   public async toggleFileContext(uri?: vscode.Uri): Promise<void> {
     // Use active editor if no URI is provided
@@ -309,6 +568,33 @@ export class ContextTracker {
     } else {
       this.addToContext(uri);
     }
+  }
+  
+  /**
+   * Toggles whether a file is included in the AI context by file path
+   * This is a direct method that doesn't perform UI updates
+   * @param filePath The path to the file
+   * @returns Whether the file is now included
+   */
+  public toggleFileInclusion(filePath: string): boolean {
+    if (this.includedFiles.has(filePath)) {
+      this.includedFiles.delete(filePath);
+      // Always clear any line ranges for this file when removing
+      this.fileLineRanges.delete(filePath);
+    } else {
+      this.includedFiles.add(filePath);
+    }
+    
+    this.saveIncludedFiles();
+    
+    // Update UI elements
+    this.updateAllEditorDecorations();
+    this.updateStatusBarForFile(filePath);
+    this.treeDataProvider.refresh();
+    this.updateStatusBar();
+    this.updateContextForAllEditors();
+    
+    return this.includedFiles.has(filePath);
   }
   
   /**
@@ -336,14 +622,7 @@ export class ContextTracker {
     
     // Update decorations for each editor showing this file
     editors.forEach(editor => {
-      if (isIncluded) {
-        // Apply decorations for included files
-        const firstLineRange = new vscode.Range(0, 0, 0, 0)
-        editor.setDecorations(this.decorationType, [firstLineRange])
-      } else {
-        // Clear decorations for files that are no longer included
-        editor.setDecorations(this.decorationType, [])
-      }
+      this.updateEditorDecorations(editor, filePath, isIncluded);
     })
   }
   
@@ -358,15 +637,45 @@ export class ContextTracker {
       const filePath = editor.document.uri.fsPath
       const isIncluded = this.isFileIncluded(filePath)
       
-      if (isIncluded) {
-        // Apply decorations for included files
-        const firstLineRange = new vscode.Range(0, 0, 0, 0)
-        editor.setDecorations(this.decorationType, [firstLineRange])
-      } else {
-        // Clear decorations for files that are no longer included
-        editor.setDecorations(this.decorationType, [])
-      }
+      this.updateEditorDecorations(editor, filePath, isIncluded);
     })
+  }
+  
+  /**
+   * Updates decorations for a single editor
+   * @param editor The editor to update decorations for
+   * @param filePath The file path of the editor
+   * @param isIncluded Whether the file is included in the context
+   */
+  private updateEditorDecorations(editor: vscode.TextEditor, filePath: string, isIncluded: boolean): void {
+    if (isIncluded) {
+      const lineRanges = this.getLineRanges(filePath);
+      
+      if (lineRanges && lineRanges.length > 0) {
+        // If we have specific line ranges, only highlight those
+        const decorationRanges = lineRanges.map(range => {
+          // Convert from 1-based to 0-based indexing
+          const startLine = range.startLine - 1;
+          const endLine = range.endLine - 1;
+          const startPos = new vscode.Position(startLine, 0);
+          const endPos = new vscode.Position(endLine, editor.document.lineAt(Math.min(endLine, editor.document.lineCount - 1)).text.length);
+          return new vscode.Range(startPos, endPos);
+        });
+        
+        editor.setDecorations(this.decorationType, decorationRanges);
+      } else {
+        // If no line ranges, highlight the entire file
+        const lastLine = editor.document.lineCount - 1;
+        const fullDocRange = new vscode.Range(
+          0, 0,
+          lastLine, editor.document.lineAt(lastLine).text.length
+        );
+        editor.setDecorations(this.decorationType, [fullDocRange]);
+      }
+    } else {
+      // Clear decorations for files that are no longer included
+      editor.setDecorations(this.decorationType, [])
+    }
   }
   
   /**
@@ -389,11 +698,11 @@ export class ContextTracker {
   private clearAllContext(): void {
     this.includedFiles.clear();
     
+    // Also clear all line ranges
+    this.fileLineRanges.clear();
+    
     // Save to persistent storage
-    this.context.workspaceState.update(
-      'contextIncludedFiles', 
-      []
-    );
+    this.saveIncludedFiles();
     
     // Update decorations
     this.updateAllEditorDecorations();
@@ -460,5 +769,122 @@ export class ContextTracker {
    */
   public async clearContext(): Promise<void> {
     this.clearAllContext();
+  }
+  
+  /**
+   * Loads the list of included files from storage
+   */
+  private loadIncludedFiles(): void {
+    try {
+      if (fs.existsSync(this.storageFilePath)) {
+        const data = JSON.parse(fs.readFileSync(this.storageFilePath, 'utf-8'))
+        
+        // Load included files
+        if (Array.isArray(data.files)) {
+          this.includedFiles = new Set(data.files)
+        }
+        
+        // Load line ranges if they exist
+        if (data.lineRanges && typeof data.lineRanges === 'object') {
+          this.fileLineRanges = new Map(Object.entries(data.lineRanges))
+        }
+      }
+    } catch (error) {
+      console.error('Error loading included files:', error)
+    }
+  }
+  
+  /**
+   * Sets specific line ranges for a file
+   * @param filePath The path to the file
+   * @param ranges Array of line ranges to include
+   */
+  public setLineRanges(filePath: string, ranges: LineRange[]): void {
+    // Ensure file is in the included list
+    if (!this.includedFiles.has(filePath)) {
+      this.includedFiles.add(filePath)
+    }
+    
+    this.fileLineRanges.set(filePath, ranges)
+    this.saveIncludedFiles()
+    
+    // Update UI elements to reflect the changes
+    this.updateStatusBarForFile(filePath);
+    this.updateAllEditorDecorations();
+  }
+  
+  /**
+   * Clears any line ranges for a file
+   * @param filePath The file path to clear line ranges for
+   */
+  public clearLineRanges(filePath: string): void {
+    console.log(`Clearing line ranges for file: ${filePath}`);
+    // Clear the entry from the map
+    this.fileLineRanges.delete(filePath);
+    
+    // Save changes to persistent storage
+    this.saveIncludedFiles();
+    
+    // Update UI elements
+    this.updateStatusBarForFile(filePath);
+    this.updateAllEditorDecorations();
+    this.treeDataProvider.refresh();
+  }
+  
+  /**
+   * Gets the line ranges for a file
+   * @param filePath The path to the file
+   * @returns Array of line ranges or undefined if no ranges are set
+   */
+  public getLineRanges(filePath: string): LineRange[] | undefined {
+    return this.fileLineRanges.get(filePath)
+  }
+
+  async revealLineRange(uri: vscode.Uri, startLine: number, endLine: number): Promise<void> {
+    try {
+      const document = await vscode.workspace.openTextDocument(uri);
+      const editor = await vscode.window.showTextDocument(document);
+      
+      // Create a selection from start to end line
+      const startPos = new vscode.Position(startLine, 0);
+      const endPos = new vscode.Position(endLine, document.lineAt(endLine).text.length);
+      const range = new vscode.Range(startPos, endPos);
+      
+      // Set selection and reveal
+      editor.selection = new vscode.Selection(startPos, endPos);
+      editor.revealRange(range, vscode.TextEditorRevealType.InCenter);
+    } catch (error) {
+      console.error('Error revealing line range:', error);
+      vscode.window.showErrorMessage(`Could not reveal line range: ${error}`);
+    }
+  }
+
+  removeLineRange(item: FileTreeItem): void {
+    if (!item.lineRange || !item.uri) {
+      return;
+    }
+    
+    const filePath = item.uri.fsPath;
+    const lineRanges = this.getLineRanges(filePath) || [];
+    
+    // Find and remove the specific line range
+    const updatedRanges = lineRanges.filter(
+      range => !(range.startLine === item.lineRange!.startLine && range.endLine === item.lineRange!.endLine)
+    );
+    
+    if (updatedRanges.length === 0) {
+      // No more ranges, remove the entry
+      this.clearLineRanges(filePath);
+    } else {
+      // Update with remaining ranges
+      this.setLineRanges(filePath, updatedRanges);
+    }
+    
+    // Update decorations explicitly (in case the above methods didn't)
+    this.updateAllEditorDecorations();
+    
+    // Refresh the tree view
+    this.treeDataProvider.refresh();
+    vscode.window.showInformationMessage(`Removed lines ${item.lineRange.startLine}-${item.lineRange.endLine} from context.`);
   }
 } 

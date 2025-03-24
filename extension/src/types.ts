@@ -54,9 +54,20 @@ export interface GetActiveTabsCommand extends Command {
   includeContent?: boolean
 }
 
+export interface LineRange {
+  startLine: number;
+  endLine: number;
+}
+
+export interface FileLineSelection {
+  filePath: string;
+  ranges?: LineRange[];
+}
+
 export interface GetContextTabsCommand extends Command {
   type: 'getContextTabs'
   includeContent?: boolean
+  selections?: FileLineSelection[]
 }
 
 export interface ExecuteShellCommand extends Command {
