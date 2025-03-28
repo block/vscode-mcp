@@ -2,7 +2,7 @@
   "name": "vscode-mcp-extension",
   "displayName": "MCP Server",
   "description": "Extension for the VSCode MCP Server",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "publisher": "block",
   "private": true,
   "repository": {
