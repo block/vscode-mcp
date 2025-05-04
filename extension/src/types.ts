@@ -11,6 +11,7 @@ export type CommandType =
   | 'getActiveTabs'
   | 'getContextTabs'
   | 'executeShellCommand'
+  | 'getCompletions'
 
 // Base command interface
 export interface Command {
@@ -76,6 +77,16 @@ export interface ExecuteShellCommand extends Command {
   cwd?: string
 }
 
+export interface GetCompletionsCommand extends Command {
+  type: 'getCompletions'
+  filePath: string
+  position: {
+    line: number
+    character: number
+  }
+  triggerCharacter?: string
+}
+
 // Type union of all possible commands
 export type CommandUnion =
   | ShowDiffCommand
@@ -87,6 +98,7 @@ export type CommandUnion =
   | GetActiveTabsCommand
   | GetContextTabsCommand
   | ExecuteShellCommand
+  | GetCompletionsCommand
 
 // Response interfaces
 export interface BaseResponse {
@@ -110,6 +122,18 @@ export interface ActiveTabsResponse extends BaseResponse {
     languageId?: string
     content?: string
   }>
+}
+
+export interface CompletionItem {
+  label: string
+  insertText?: string
+  detail?: string
+  documentation?: string
+  kind?: string
+}
+
+export interface CompletionsResponse extends BaseResponse {
+  completions?: CompletionItem[]
 }
 
 // The following type guards are kept for backward compatibility
@@ -149,4 +173,8 @@ export function isGetContextTabsCommand(command: Command): command is GetContext
 
 export function isExecuteShellCommand(command: Command): command is ExecuteShellCommand {
   return command.type === 'executeShellCommand'
+}
+
+export function isGetCompletionsCommand(command: Command): command is GetCompletionsCommand {
+  return command.type === 'getCompletions'
 }

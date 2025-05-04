@@ -17,6 +17,8 @@ import {
   ActiveTabsResponse,
   GetContextTabsCommand,
   ExecuteShellCommand,
+  GetCompletionsCommand,
+  CompletionsResponse,
 } from './types'
 import { DiffManager } from './diffManager'
 import { SettingsManager } from './settingsManager'
@@ -36,6 +38,7 @@ type CommandHandlerMap = {
   getActiveTabs: (command: { type: 'getActiveTabs'; includeContent?: boolean }) => Promise<ActiveTabsResponse>
   getContextTabs: (command: GetContextTabsCommand) => Promise<ActiveTabsResponse>
   executeShellCommand: (command: ExecuteShellCommand) => Promise<BaseResponse>
+  getCompletions: (command: GetCompletionsCommand) => Promise<CompletionsResponse>
 }
 
 /**
@@ -69,6 +72,7 @@ export class CommandHandler {
     this.registerHandler('getActiveTabs', this.handleGetActiveTabs.bind(this))
     this.registerHandler('getContextTabs', this.handleGetContextTabs.bind(this))
     this.registerHandler('executeShellCommand', this.handleExecuteShellCommand.bind(this))
+    this.registerHandler('getCompletions', this.handleGetCompletions.bind(this))
   }
 
   /**
@@ -530,6 +534,62 @@ export class CommandHandler {
       return {
         success: false,
         error: error instanceof Error ? error.message : String(error),
+      }
+    }
+  }
+
+  /**
+   * Handle the getCompletions command
+   */
+  private async handleGetCompletions(command: GetCompletionsCommand): Promise<CompletionsResponse> {
+    const { filePath, position, triggerCharacter } = command
+    console.log('MCP Companion: Getting completions:', filePath, position, triggerCharacter)
+
+    try {
+      // Get document
+      const uri = vscode.Uri.file(filePath)
+      const document = await vscode.workspace.openTextDocument(uri)
+      
+      // Convert to VSCode position (0-based)
+      const vsCodePosition = new vscode.Position(position.line, position.character)
+      
+      // Get completions using VSCode API
+      const completionList = await vscode.commands.executeCommand<vscode.CompletionList>(
+        'vscode.executeCompletionItemProvider',
+        document.uri,
+        vsCodePosition,
+        triggerCharacter
+      )
+      
+      if (!completionList) {
+        return {
+          success: true,
+          completions: [] // Return empty array if no completions
+        }
+      }
+      
+      // Map to our simpler format
+      const completions = completionList.items.map(item => ({
+        label: typeof item.label === 'string' ? item.label : item.label.label,
+        insertText: item.insertText?.toString() || undefined,
+        detail: item.detail,
+        documentation: typeof item.documentation === 'string' 
+          ? item.documentation 
+          : item.documentation?.value,
+        kind: item.kind ? String(item.kind) : undefined
+      }))
+      
+      console.log(`MCP Companion: Found ${completions.length} completions`)
+      
+      return {
+        success: true,
+        completions
+      }
+    } catch (error) {
+      console.error('MCP Companion: Error getting completions:', error)
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : String(error)
       }
     }
   }
