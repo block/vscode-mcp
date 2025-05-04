@@ -55,7 +55,7 @@ Once installed, you can configure your AI assistant to use this server. The serv
 - Creating Diffs of file changes that require Accept/Reject
 
 ## Configuration
-
+y
 After installation, you'll need to configure your AI assistant to use this server.
 
 ### Goose Desktop Configuration

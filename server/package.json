@@ -12,7 +12,6 @@
   ],
   "scripts": {
     "build": "tsc",
-    "postbuild": "chmod +x build/cli.js",
     "start": "node build/index.js",
     "dev": "tsc -w",
     "prepare": "npm run build",
@@ -34,12 +33,15 @@
     "type": "git",
     "url": ""
   },
-  "homepage": "",
+  "homepage": "https://cline.bot",
   "bugs": {
-    "url": ""
+    "url": "https://github.com/cline/cline/issues"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "0.6.0",
+    "@octokit/rest": "^20.1.1",
+    "puppeteer": "^22.8.0",
+    "sqlite3": "^5.1.7",
     "yaml": "^2.7.0",
     "yargs": "^17.7.2"
   },

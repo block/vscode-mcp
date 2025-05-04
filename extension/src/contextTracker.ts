@@ -114,7 +114,7 @@ class ContextFilesProvider implements vscode.TreeDataProvider<FileTreeItem | vsc
 }
 
 /**
- * CodeLens provider for showing "Add to Goose" button on text selections
+ * CodeLens provider for showing "Add to Goose/Cline" buttons on text selections
  */
 class ContextCodeLensProvider implements vscode.CodeLensProvider {
   private _onDidChangeCodeLenses: vscode.EventEmitter<void> = new vscode.EventEmitter<void>();
@@ -160,15 +160,23 @@ class ContextCodeLensProvider implements vscode.CodeLensProvider {
         selection.end.line, selection.end.character
       );
       
-      // Add a CodeLens at the start of the selection
-      const lens = new vscode.CodeLens(range);
-      lens.command = {
+      // Add a CodeLens for Goose at the start of the selection
+      const gooseLens = new vscode.CodeLens(range);
+      gooseLens.command = {
         title: '$(add) Add to Goose',
-        command: 'mcp-companion.includeSelectedLines',
-        tooltip: 'Add selected lines to AI context'
+        command: 'mcp-companion.includeSelectedLinesGoose',
+        tooltip: 'Add selected lines to Goose AI context'
       };
+      codeLenses.push(gooseLens);
       
-      codeLenses.push(lens);
+      // Add a CodeLens for Cline at the start of the selection
+      const clineLens = new vscode.CodeLens(range);
+      clineLens.command = {
+        title: '$(add) Add to Cline',
+        command: 'mcp-companion.includeSelectedLinesCline',
+        tooltip: 'Add selected lines to Cline AI context'
+      };
+      codeLenses.push(clineLens);
     }
     
     return codeLenses;
@@ -236,56 +244,22 @@ export class ContextTracker {
         }
       }),
       
+      // Original command for backward compatibility
       vscode.commands.registerCommand('mcp-companion.includeSelectedLines', () => {
-        console.log('Include selected lines command triggered');
-        const activeEditor = vscode.window.activeTextEditor;
-        if (!activeEditor || activeEditor.selections.length === 0) {
-          vscode.window.showWarningMessage('No active selection to include in AI context');
-          return;
-        }
-
-        const filePath = activeEditor.document.uri.fsPath;
-        
-        // Include the file first if it's not already included
-        if (!this.isFileIncluded(filePath)) {
-          this.toggleFileInclusion(filePath);
-        }
-        
-        // Get the line ranges from the selections
-        const newRanges = activeEditor.selections.map(selection => {
-          return {
-            startLine: selection.start.line + 1, // Convert to 1-based
-            endLine: selection.end.line + 1      // Convert to 1-based
-          };
-        });
-        
-        // Get existing ranges and append new ones
-        const existingRanges = this.getLineRanges(filePath) || [];
-        
-        // Merge existing and new ranges, avoiding duplicates
-        const combinedRanges = [...existingRanges];
-        
-        for (const newRange of newRanges) {
-          // Check if this range already exists
-          const isDuplicate = combinedRanges.some(
-            range => range.startLine === newRange.startLine && range.endLine === newRange.endLine
-          );
-          
-          if (!isDuplicate) {
-            combinedRanges.push(newRange);
-          }
-        }
-        
-        // Store the combined line ranges for this file
-        this.setLineRanges(filePath, combinedRanges);
-        
-        // Update UI to reflect the changes
-        this.updateStatusBarForFile(filePath);
-        this.updateAllEditorDecorations();
-        this.treeDataProvider.refresh();
-        
-        const totalNewLines = newRanges.reduce((sum, range) => sum + (range.endLine - range.startLine + 1), 0);
-        vscode.window.showInformationMessage(`Added ${totalNewLines} selected lines from ${path.basename(filePath)} to AI context`);
+        console.log('Include selected lines command triggered (generic)');
+        this.includeSelectedLinesForAssistant('both');
+      }),
+      
+      // Goose-specific command
+      vscode.commands.registerCommand('mcp-companion.includeSelectedLinesGoose', () => {
+        console.log('Include selected lines command triggered for Goose');
+        this.includeSelectedLinesForAssistant('goose');
+      }),
+      
+      // Cline-specific command
+      vscode.commands.registerCommand('mcp-companion.includeSelectedLinesCline', () => {
+        console.log('Include selected lines command triggered for Cline');
+        this.includeSelectedLinesForAssistant('cline');
       }),
       
       vscode.commands.registerCommand('mcp-companion.clearLineSelections', () => {
@@ -887,4 +861,68 @@ export class ContextTracker {
     this.treeDataProvider.refresh();
     vscode.window.showInformationMessage(`Removed lines ${item.lineRange.startLine}-${item.lineRange.endLine} from context.`);
   }
-} 
+  
+  /**
+   * Includes selected lines in the AI context for a specific assistant
+   * @param assistant Which assistant to add the lines for: 'goose', 'cline', or 'both'
+   */
+  public includeSelectedLinesForAssistant(assistant: 'goose' | 'cline' | 'both'): void {
+    const activeEditor = vscode.window.activeTextEditor;
+    if (!activeEditor || activeEditor.selections.length === 0) {
+      vscode.window.showWarningMessage('No active selection to include in AI context');
+      return;
+    }
+
+    const filePath = activeEditor.document.uri.fsPath;
+    
+    // Include the file first if it's not already included
+    if (!this.isFileIncluded(filePath)) {
+      this.toggleFileInclusion(filePath);
+    }
+    
+    // Get the line ranges from the selections
+    const newRanges = activeEditor.selections.map(selection => {
+      return {
+        startLine: selection.start.line + 1, // Convert to 1-based
+        endLine: selection.end.line + 1      // Convert to 1-based
+      };
+    });
+    
+    // Get existing ranges and append new ones
+    const existingRanges = this.getLineRanges(filePath) || [];
+    
+    // Merge existing and new ranges, avoiding duplicates
+    const combinedRanges = [...existingRanges];
+    
+    for (const newRange of newRanges) {
+      // Check if this range already exists
+      const isDuplicate = combinedRanges.some(
+        range => range.startLine === newRange.startLine && range.endLine === newRange.endLine
+      );
+      
+      if (!isDuplicate) {
+        combinedRanges.push(newRange);
+      }
+    }
+    
+    // Store the combined line ranges for this file
+    this.setLineRanges(filePath, combinedRanges);
+    
+    // Update UI to reflect the changes
+    this.updateStatusBarForFile(filePath);
+    this.updateAllEditorDecorations();
+    this.treeDataProvider.refresh();
+    
+    const totalNewLines = newRanges.reduce((sum, range) => sum + (range.endLine - range.startLine + 1), 0);
+    
+    // Show different messages based on which assistant was targeted
+    if (assistant === 'goose') {
+      vscode.window.showInformationMessage(`Added ${totalNewLines} selected lines from ${path.basename(filePath)} to Goose AI context`);
+    } else if (assistant === 'cline') {
+      vscode.window.showInformationMessage(`Added ${totalNewLines} selected lines from ${path.basename(filePath)} to Cline AI context`);
+    } else {
+      // Both
+      vscode.window.showInformationMessage(`Added ${totalNewLines} selected lines from ${path.basename(filePath)} to AI context`);
+    }
+  }
+}
